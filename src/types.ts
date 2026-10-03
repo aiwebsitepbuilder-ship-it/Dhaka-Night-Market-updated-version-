@@ -7,9 +7,28 @@ export type PageId =
   | 'partners'
   | 'stories'
   | 'about'
-  | 'contact';
+  | 'contact'
+  | 'admin';
 
 export type Language = 'en' | 'bn';
+
+export type EnquiryStatus = 'new' | 'contacted' | 'approved' | 'archived';
+
+export interface EnquiryRecord {
+  id: string;
+  type: 'vendor' | 'partner' | 'contact';
+  title: string;
+  businessOrOrg: string;
+  contactName: string;
+  phone: string;
+  email: string;
+  categoryOrType: string;
+  preferredEventOrDetails?: string;
+  notesOrMessage: string;
+  submittedAt: string;
+  status: EnquiryStatus;
+  sentToMail: string; // dhakanightmarket@gmail.com
+}
 
 export interface EventDetail {
   id: string;

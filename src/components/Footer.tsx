@@ -1,5 +1,5 @@
 import React from 'react';
-import { Phone, Mail, MapPin, Facebook, Instagram } from 'lucide-react';
+import { Phone, Mail, MapPin, Facebook, Instagram, Shield } from 'lucide-react';
 import { Logo } from './Logo';
 import { Language, PageId } from '../types';
 import { OFFICIAL_INFO } from '../data/content';
@@ -20,6 +20,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, lang }) => {
     { id: 'stories', labelEn: 'Stories & News', labelBn: 'স্টোরিজ ও আপডেট' },
     { id: 'about', labelEn: 'About Dhaka Night Market', labelBn: 'আমাদের সম্পর্কে' },
     { id: 'contact', labelEn: 'Contact & Location', labelBn: 'যোগাযোগ ও ঠিকানা' },
+    { id: 'admin', labelEn: 'Admin Portal', labelBn: 'এডমিন পোর্টাল' },
   ];
 
   return (
@@ -146,8 +147,18 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, lang }) => {
 
       {/* Bottom Legal & Copyright Bar */}
       <div className="border-t border-slate-900 bg-slate-950/80 py-5 text-[11px] text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p>© {new Date().getFullYear()} Dhaka Night Market. All Rights Reserved.</p>
+          <div className="flex items-center gap-4">
+            <span className="text-slate-600 hidden sm:inline">•</span>
+            <button
+              onClick={() => onNavigate('admin')}
+              className="flex items-center gap-1.5 text-slate-400 hover:text-amber-400 cursor-pointer transition-colors"
+            >
+              <Shield className="w-3.5 h-3.5 text-amber-500" />
+              <span>Organizer Admin Portal</span>
+            </button>
+          </div>
         </div>
       </div>
     </footer>

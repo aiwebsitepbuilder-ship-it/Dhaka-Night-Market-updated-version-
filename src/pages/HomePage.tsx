@@ -18,7 +18,8 @@ import {
   Mail,
 } from 'lucide-react';
 import { Language, PageId } from '../types';
-import { OFFICIAL_INFO, UPCOMING_EVENTS, EXPERIENCE_CATEGORIES, GALLERY_ITEMS } from '../data/content';
+import { OFFICIAL_INFO, EXPERIENCE_CATEGORIES, GALLERY_ITEMS } from '../data/content';
+import { useEvents } from '../context/EventsContext';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { ImagePlaceholder } from '../components/ImagePlaceholder';
 import { PlaceholderNotice } from '../components/PlaceholderNotice';
@@ -29,7 +30,7 @@ interface HomePageProps {
 }
 
 export const HomePage: React.FC<HomePageProps> = ({ onNavigate, lang }) => {
-  const currentEvent = UPCOMING_EVENTS[0];
+  const { currentUpcomingEvent: currentEvent } = useEvents();
 
   const experienceIconMap: Record<string, React.ReactNode> = {
     UtensilsCrossed: <UtensilsCrossed className="w-5 h-5 text-amber-400" />,
@@ -97,13 +98,13 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate, lang }) => {
           {/* Reusable Countdown Timer Component: Days, Hours, and Minutes */}
           <div className="pt-8">
             <CountdownTimer
-              targetDate="2026-10-09T12:00:00+06:00"
-              eventName="Wedding & Lifestyle Exhibition featuring House of Bengal"
-              eventNameBn="ওয়েডিং অ্যান্ড লাইফস্টাইল এক্সিবিশন ফিচারিং হাউস অফ বেঙ্গল"
-              venue="Sheraton Banani (Grand Ballroom), Dhaka"
-              venueBn="শেরাটন বনানী (গ্র্যান্ড বলরুম), ঢাকা"
-              timeRange="12:00 PM – 12:00 AM"
-              timeRangeBn="দুপুর ১২:০০ – রাত ১২:০০"
+              targetDate={currentEvent.startDateIso}
+              eventName={currentEvent.name}
+              eventNameBn={currentEvent.nameBn}
+              venue={currentEvent.location}
+              venueBn={currentEvent.locationBn}
+              timeRange={currentEvent.time}
+              timeRangeBn={currentEvent.timeBn}
               lang={lang}
               variant="card"
               showSeconds={false}

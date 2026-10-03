@@ -9,10 +9,12 @@ import {
   Building,
   Target,
   Megaphone,
+  Mail,
 } from 'lucide-react';
 import { Language, FormSubmissionState } from '../types';
 import { OFFICIAL_INFO } from '../data/content';
 import { PlaceholderNotice } from '../components/PlaceholderNotice';
+import { submitPartnerEnquiry, OFFICIAL_ADMIN_EMAIL } from '../services/emailService';
 
 interface PartnersPageProps {
   lang: Language;
@@ -32,22 +34,66 @@ export const PartnersPage: React.FC<PartnersPageProps> = ({ lang }) => {
   const [formState, setFormState] = useState<FormSubmissionState>({
     status: 'idle',
   });
+  const [lastMailtoUrl, setLastMailtoUrl] = useState<string>('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const lettersOnlyRegex = /^[\p{L}\s.'-]+$/u;
+  const numbersOnlyRegex = /^[0-9]+$/;
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.organizationName.trim() || !formData.contactPerson.trim()) {
+    const trimmedOrg = formData.organizationName.trim();
+    const trimmedContact = formData.contactPerson.trim();
+    const trimmedPhone = formData.phone.trim();
+
+    // 1. Validation for Company / Organization Name (letters only)
+    if (!trimmedOrg) {
       setFormState({
         status: 'error',
-        message: lang === 'en' ? 'Please provide company and contact names.' : 'প্রতিষ্ঠানের নাম ও প্রতিনিধির নাম পূরণ করুন।',
+        message: lang === 'en' ? 'Please provide the company name.' : 'প্রতিষ্ঠানের নাম প্রদান করুন।',
       });
       return;
     }
 
-    if (!formData.phone.trim() || formData.phone.length < 8) {
+    if (!lettersOnlyRegex.test(trimmedOrg) || /\d/.test(trimmedOrg)) {
       setFormState({
         status: 'error',
-        message: lang === 'en' ? 'Please provide a valid phone number.' : 'একটি সঠিক ফোন নম্বর প্রদান করুন।',
+        message:
+          lang === 'en'
+            ? 'Company name must contain letters only (no numbers).'
+            : 'কোম্পানির নাম শুধুমাত্র অক্ষর হতে হবে (কোন সংখ্যা নয়)।',
+      });
+      return;
+    }
+
+    // 2. Validation for Contact Person Name (letters only)
+    if (!trimmedContact) {
+      setFormState({
+        status: 'error',
+        message: lang === 'en' ? 'Please provide the contact person name.' : 'প্রতিনিধির নাম পূরণ করুন।',
+      });
+      return;
+    }
+
+    if (!lettersOnlyRegex.test(trimmedContact) || /\d/.test(trimmedContact)) {
+      setFormState({
+        status: 'error',
+        message:
+          lang === 'en'
+            ? 'Contact person name must contain letters only (no numbers).'
+            : 'যোগাযোগকারীর নাম শুধুমাত্র অক্ষর হতে হবে (কোন সংখ্যা নয়)।',
+      });
+      return;
+    }
+
+    // 3. Validation for Phone Number (numbers only)
+    if (!trimmedPhone || !numbersOnlyRegex.test(trimmedPhone) || trimmedPhone.length < 8) {
+      setFormState({
+        status: 'error',
+        message:
+          lang === 'en'
+            ? 'Phone number must contain numbers only (minimum 8 digits).'
+            : 'ফোন নম্বর শুধুমাত্র সংখ্যা হতে হবে (কমপক্ষে ৮ ডিজিট)।',
       });
       return;
     }
@@ -62,13 +108,24 @@ export const PartnersPage: React.FC<PartnersPageProps> = ({ lang }) => {
 
     setFormState({ status: 'submitting' });
 
-    setTimeout(() => {
+    try {
+      const result = await submitPartnerEnquiry({
+        organizationName: trimmedOrg,
+        contactPerson: trimmedContact,
+        designation: formData.designation,
+        phone: trimmedPhone,
+        email: formData.email.trim(),
+        partnershipType: formData.partnershipType,
+        message: formData.message,
+      });
+
+      setLastMailtoUrl(result.mailtoUrl);
       setFormState({
         status: 'success',
         message:
           lang === 'en'
-            ? 'Partnership inquiry received. Our partnerships director will connect with your organization with custom collaboration opportunities.'
-            : 'পার্টনারশিপ আবেদন সফলভাবে গৃহীত হয়েছে। আমাদের টিম অতি দ্রুত আপনার সাথে যোগাযোগ করবে।',
+            ? `Partnership inquiry delivered directly to ${OFFICIAL_ADMIN_EMAIL}! Our partnerships director will connect with your organization shortly.`
+            : `পার্টনারশিপ আবেদন সরাসরি ${OFFICIAL_ADMIN_EMAIL}-এ পৌঁছে গেছে! আমাদের টিম অতি দ্রুত আপনার সাথে যোগাযোগ করবে।`,
       });
       setFormData({
         organizationName: '',
@@ -79,7 +136,15 @@ export const PartnersPage: React.FC<PartnersPageProps> = ({ lang }) => {
         partnershipType: 'sponsorship',
         message: '',
       });
-    }, 800);
+    } catch {
+      setFormState({
+        status: 'error',
+        message:
+          lang === 'en'
+            ? 'There was an issue dispatching the email. You can contact us directly at dhakanightmarket@gmail.com.'
+            : 'আবেদন পাঠাতে সমস্যা হয়েছে। সরাসরি dhakanightmarket@gmail.com-এ যোগাযোগ করুন।',
+      });
+    }
   };
 
   return (
@@ -237,17 +302,23 @@ export const PartnersPage: React.FC<PartnersPageProps> = ({ lang }) => {
       {/* PARTNER / SPONSOR ENQUIRY FORM */}
       <div className="rounded-2xl bg-gradient-to-br from-[#0F172A] via-[#0B132B] to-[#070B19] border border-amber-500/40 p-6 sm:p-10 shadow-2xl">
         <div className="max-w-2xl mb-8 space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-amber-500/15 text-amber-300 text-xs font-semibold uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>{lang === 'en' ? 'Corporate Inquiries' : 'কর্পোরেট অনুসন্ধান'}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-amber-500/15 text-amber-300 text-xs font-semibold uppercase tracking-wider">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{lang === 'en' ? 'Corporate Inquiries' : 'কর্পোরেট অনুসন্ধান'}</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-xs font-semibold">
+              <Mail className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Direct to: {OFFICIAL_ADMIN_EMAIL}</span>
+            </div>
           </div>
           <h2 className="text-2xl sm:text-3xl font-bold text-white font-display">
             {lang === 'en' ? 'Sponsor & Partner Enquiry Form' : 'স্পন্সর ও পার্টনার এনকোয়ারি ফরম'}
           </h2>
           <p className="text-xs sm:text-sm text-slate-300">
             {lang === 'en'
-              ? 'Connect directly with the Dhaka Night Market steering team to explore bespoke partnership packages.'
-              : 'কাস্টম পার্টনারশিপ প্যাকেজ ও স্পন্সরশিপের জন্য ঢাকা নাইট মার্কেট টিমের সাথে সরাসরি যোগাযোগ করুন।'}
+              ? 'Connect directly with the Dhaka Night Market steering team. All enquiries are delivered directly to dhakanightmarket@gmail.com.'
+              : 'কাস্টম পার্টনারশিপ প্যাকেজ ও স্পন্সরশিপের জন্য যোগাযোগ করুন। আবেদন সরাসরি dhakanightmarket@gmail.com-এ পৌঁছাবে।'}
           </p>
         </div>
 
@@ -257,17 +328,33 @@ export const PartnersPage: React.FC<PartnersPageProps> = ({ lang }) => {
               <CheckCircle className="w-8 h-8" />
             </div>
             <h3 className="text-xl font-bold text-white">
-              {lang === 'en' ? 'Inquiry Submitted' : 'অনুসন্ধান গৃহীত হয়েছে'}
+              {lang === 'en' ? 'Inquiry Delivered to Email' : 'অনুসন্ধান ইমেইলে পৌঁছেছে'}
             </h3>
             <p className="text-sm text-emerald-200 max-w-md mx-auto">
               {formState.message}
             </p>
-            <button
-              onClick={() => setFormState({ status: 'idle' })}
-              className="mt-4 px-5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium cursor-pointer"
-            >
-              {lang === 'en' ? 'Submit Another Enquiry' : 'আরেকটি অনুসন্ধান পাঠান'}
-            </button>
+            <div className="pt-2 text-xs text-slate-400 font-mono">
+              Target Mail: <span className="text-amber-300 font-bold">{OFFICIAL_ADMIN_EMAIL}</span> • Official Contact: {OFFICIAL_INFO.phone}
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
+              {lastMailtoUrl && (
+                <a
+                  href={lastMailtoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>{lang === 'en' ? 'Open Copy in Mail App' : 'মেইল অ্যাপে কপি খুলুন'}</span>
+                </a>
+              )}
+              <button
+                onClick={() => setFormState({ status: 'idle' })}
+                className="px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium cursor-pointer transition-colors"
+              >
+                {lang === 'en' ? 'Submit Another Enquiry' : 'আরেকটি অনুসন্ধান পাঠান'}
+              </button>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -279,34 +366,53 @@ export const PartnersPage: React.FC<PartnersPageProps> = ({ lang }) => {
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {/* Organization / Company Name (Letters only) */}
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  {lang === 'en' ? 'Organization / Company Name *' : 'প্রতিষ্ঠানের নাম *'}
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    {lang === 'en' ? 'Organization / Company Name *' : 'প্রতিষ্ঠানের নাম *'}
+                  </label>
+                  <span className="text-[10px] text-amber-400 font-mono">
+                    {lang === 'en' ? 'Letters only' : 'শুধুমাত্র অক্ষর'}
+                  </span>
+                </div>
                 <input
                   type="text"
                   required
                   value={formData.organizationName}
-                  onChange={(e) => setFormData({ ...formData, organizationName: e.target.value })}
+                  onChange={(e) => {
+                    const cleaned = e.target.value.replace(/[\d]/g, '');
+                    setFormData({ ...formData, organizationName: cleaned });
+                  }}
                   placeholder={lang === 'en' ? 'e.g. Apex Corporation' : 'প্রতিষ্ঠানের নাম'}
                   className="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-colors"
                 />
               </div>
 
+              {/* Contact Person Name (Letters only) */}
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  {lang === 'en' ? 'Contact Person Name *' : 'যোগাযোগকারীর নাম *'}
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    {lang === 'en' ? 'Contact Person Name *' : 'যোগাযোগকারীর নাম *'}
+                  </label>
+                  <span className="text-[10px] text-amber-400 font-mono">
+                    {lang === 'en' ? 'Letters only' : 'শুধুমাত্র অক্ষর'}
+                  </span>
+                </div>
                 <input
                   type="text"
                   required
                   value={formData.contactPerson}
-                  onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
+                  onChange={(e) => {
+                    const cleaned = e.target.value.replace(/[\d]/g, '');
+                    setFormData({ ...formData, contactPerson: cleaned });
+                  }}
                   placeholder="Full name"
                   className="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-colors"
                 />
               </div>
 
+              {/* Designation */}
               <div className="space-y-2">
                 <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
                   {lang === 'en' ? 'Designation / Title' : 'পদবী'}
@@ -320,15 +426,26 @@ export const PartnersPage: React.FC<PartnersPageProps> = ({ lang }) => {
                 />
               </div>
 
+              {/* Phone Number (Numbers only) */}
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  {lang === 'en' ? 'Phone Number *' : 'ফোন নম্বর *'}
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    {lang === 'en' ? 'Phone Number *' : 'ফোন নম্বর *'}
+                  </label>
+                  <span className="text-[10px] text-amber-400 font-mono">
+                    {lang === 'en' ? 'Numbers only' : 'শুধুমাত্র সংখ্যা'}
+                  </span>
+                </div>
                 <input
                   type="tel"
                   required
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  onChange={(e) => {
+                    const cleaned = e.target.value.replace(/\D/g, '');
+                    setFormData({ ...formData, phone: cleaned });
+                  }}
                   placeholder="01XXXXXXXXX"
                   className="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-100 placeholder-slate-500 text-sm font-mono focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-colors"
                 />

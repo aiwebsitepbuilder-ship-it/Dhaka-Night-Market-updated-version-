@@ -11,10 +11,12 @@ import {
   DollarSign,
   Shield,
   ArrowRight,
+  Mail,
 } from 'lucide-react';
 import { Language, FormSubmissionState } from '../types';
 import { OFFICIAL_INFO } from '../data/content';
 import { PlaceholderNotice } from '../components/PlaceholderNotice';
+import { submitVendorEnquiry, OFFICIAL_ADMIN_EMAIL } from '../services/emailService';
 
 interface VendorsPageProps {
   lang: Language;
@@ -35,23 +37,67 @@ export const VendorsPage: React.FC<VendorsPageProps> = ({ lang }) => {
   const [formState, setFormState] = useState<FormSubmissionState>({
     status: 'idle',
   });
+  const [lastMailtoUrl, setLastMailtoUrl] = useState<string>('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Letters only regex (supports English and Bengali letters, spaces, dots, apostrophes, hyphens)
+  const lettersOnlyRegex = /^[\p{L}\s.'-]+$/u;
+  const numbersOnlyRegex = /^[0-9]+$/;
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation
-    if (!formData.businessName.trim() || !formData.contactName.trim()) {
+    const trimmedBusiness = formData.businessName.trim();
+    const trimmedContact = formData.contactName.trim();
+    const trimmedPhone = formData.phone.trim();
+
+    // 1. Validation for Company / Business Name (letters only)
+    if (!trimmedBusiness) {
       setFormState({
         status: 'error',
-        message: lang === 'en' ? 'Please provide business and contact names.' : 'দয়া করে ব্যবসা ও যোগাযোগের নাম পূরণ করুন।',
+        message: lang === 'en' ? 'Please provide the company name.' : 'দয়া করে কোম্পানির নাম প্রদান করুন।',
       });
       return;
     }
 
-    if (!formData.phone.trim() || formData.phone.length < 8) {
+    if (!lettersOnlyRegex.test(trimmedBusiness) || /\d/.test(trimmedBusiness)) {
       setFormState({
         status: 'error',
-        message: lang === 'en' ? 'Please provide a valid phone number.' : 'দয়া করে একটি সঠিক ফোন নম্বর লিখুন।',
+        message:
+          lang === 'en'
+            ? 'Company name must contain letters only (no numbers).'
+            : 'কোম্পানির নাম শুধুমাত্র অক্ষর হতে হবে (কোন সংখ্যা নয়)।',
+      });
+      return;
+    }
+
+    // 2. Validation for Contact Person Name (letters only)
+    if (!trimmedContact) {
+      setFormState({
+        status: 'error',
+        message: lang === 'en' ? 'Please provide the contact person name.' : 'দয়া করে যোগাযোগকারীর নাম পূরণ করুন।',
+      });
+      return;
+    }
+
+    if (!lettersOnlyRegex.test(trimmedContact) || /\d/.test(trimmedContact)) {
+      setFormState({
+        status: 'error',
+        message:
+          lang === 'en'
+            ? 'Contact person name must contain letters only (no numbers).'
+            : 'যোগাযোগকারীর নাম শুধুমাত্র অক্ষর হতে হবে (কোন সংখ্যা নয়)।',
+      });
+      return;
+    }
+
+    // 3. Validation for Phone Number (numbers only)
+    if (!trimmedPhone || !numbersOnlyRegex.test(trimmedPhone) || trimmedPhone.length < 8) {
+      setFormState({
+        status: 'error',
+        message:
+          lang === 'en'
+            ? 'Phone number must contain numbers only (minimum 8 digits).'
+            : 'ফোন নম্বর শুধুমাত্র সংখ্যা হতে হবে (কমপক্ষে ৮ ডিজিট)।',
       });
       return;
     }
@@ -66,14 +112,25 @@ export const VendorsPage: React.FC<VendorsPageProps> = ({ lang }) => {
 
     setFormState({ status: 'submitting' });
 
-    // Emulate client-side form submission & provide clear readiness feedback
-    setTimeout(() => {
+    try {
+      const result = await submitVendorEnquiry({
+        businessName: trimmedBusiness,
+        contactName: trimmedContact,
+        phone: trimmedPhone,
+        email: formData.email.trim(),
+        category: formData.category,
+        preferredEvent: formData.preferredEvent,
+        stallPreference: formData.stallPreference,
+        notes: formData.notes,
+      });
+
+      setLastMailtoUrl(result.mailtoUrl);
       setFormState({
         status: 'success',
         message:
           lang === 'en'
-            ? 'Vendor enquiry submitted successfully! Our curation team will review your application and reach out shortly.'
-            : 'ভেন্ডর আবেদন সফলভাবে জমা হয়েছে! আমাদের টিম আপনার আবেদন পর্যালোচনা করে অতি দ্রুত যোগাযোগ করবে।',
+            ? `Vendor application sent directly to ${OFFICIAL_ADMIN_EMAIL}! Our curation team will review your application and reach out shortly.`
+            : `ভেন্ডর আবেদন সরাসরি ${OFFICIAL_ADMIN_EMAIL}-এ পৌঁছে গেছে! আমাদের টিম দ্রুত যোগাযোগ করবে।`,
       });
       setFormData({
         businessName: '',
@@ -85,7 +142,15 @@ export const VendorsPage: React.FC<VendorsPageProps> = ({ lang }) => {
         stallPreference: 'standard',
         notes: '',
       });
-    }, 800);
+    } catch {
+      setFormState({
+        status: 'error',
+        message:
+          lang === 'en'
+            ? 'There was an issue sending your application. Please email us directly at dhakanightmarket@gmail.com.'
+            : 'আবেদন পাঠাতে সমস্যা হয়েছে। সরাসরি dhakanightmarket@gmail.com-এ যোগাযোগ করুন।',
+      });
+    }
   };
 
   return (
@@ -209,17 +274,23 @@ export const VendorsPage: React.FC<VendorsPageProps> = ({ lang }) => {
       {/* VENDOR ENQUIRY / APPLICATION FORM */}
       <div className="rounded-2xl bg-gradient-to-br from-[#0F172A] via-[#0B132B] to-[#070B19] border border-amber-500/40 p-6 sm:p-10 shadow-2xl">
         <div className="max-w-2xl mb-8 space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-amber-500/15 text-amber-300 text-xs font-semibold uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>{lang === 'en' ? 'Official Application' : 'অফিসিয়াল আবেদন'}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-amber-500/15 text-amber-300 text-xs font-semibold uppercase tracking-wider">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{lang === 'en' ? 'Official Application' : 'অফিসিয়াল আবেদন'}</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-xs font-semibold">
+              <Mail className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Direct to: {OFFICIAL_ADMIN_EMAIL}</span>
+            </div>
           </div>
           <h2 className="text-2xl sm:text-3xl font-bold text-white font-display">
             {lang === 'en' ? 'Vendor Enquiry / Application Form' : 'ভেন্ডর এনকোয়ারি / আবেদন ফরম'}
           </h2>
           <p className="text-xs sm:text-sm text-slate-300">
             {lang === 'en'
-              ? 'Complete the form below to register your brand’s interest. Applications are reviewed on a rolling basis.'
-              : 'আপনার ব্র্যান্ডের আগ্রহ জানাতে নিচের ফরমটি পূরণ করুন। আমাদের টিম দ্রুত যোগাযোগ করবে।'}
+              ? 'Complete the form below to register your brand’s interest. Applications are delivered directly to dhakanightmarket@gmail.com and reviewed promptly.'
+              : 'আপনার ব্র্যান্ডের আগ্রহ জানাতে নিচের ফরমটি পূরণ করুন। আবেদন সরাসরি dhakanightmarket@gmail.com-এ জমা হবে।'}
           </p>
         </div>
 
@@ -229,20 +300,33 @@ export const VendorsPage: React.FC<VendorsPageProps> = ({ lang }) => {
               <CheckCircle className="w-8 h-8" />
             </div>
             <h3 className="text-xl font-bold text-white">
-              {lang === 'en' ? 'Application Received' : 'আবেদন গৃহীত হয়েছে'}
+              {lang === 'en' ? 'Application Delivered to Email' : 'আবেদন ইমেইলে পৌঁছেছে'}
             </h3>
             <p className="text-sm text-emerald-200 max-w-md mx-auto">
               {formState.message}
             </p>
             <div className="pt-2 text-xs text-slate-400 font-mono">
-              Direct Contact: {OFFICIAL_INFO.phone} • {OFFICIAL_INFO.email}
+              Receiver Email: <span className="text-amber-300 font-bold">{OFFICIAL_ADMIN_EMAIL}</span> • Hotlines: {OFFICIAL_INFO.phone}
             </div>
-            <button
-              onClick={() => setFormState({ status: 'idle' })}
-              className="mt-4 px-5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium cursor-pointer"
-            >
-              {lang === 'en' ? 'Submit Another Enquiry' : 'আরেকটি আবেদন জমা দিন'}
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
+              {lastMailtoUrl && (
+                <a
+                  href={lastMailtoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>{lang === 'en' ? 'Open Copy in Mail App' : 'মেইল অ্যাপে কপি খুলুন'}</span>
+                </a>
+              )}
+              <button
+                onClick={() => setFormState({ status: 'idle' })}
+                className="px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium cursor-pointer transition-colors"
+              >
+                {lang === 'en' ? 'Submit Another Enquiry' : 'আরেকটি আবেদন জমা দিন'}
+              </button>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -254,46 +338,74 @@ export const VendorsPage: React.FC<VendorsPageProps> = ({ lang }) => {
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {/* Business Name */}
+              {/* Business Name (Letters only) */}
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  {lang === 'en' ? 'Brand / Business Name *' : 'ব্র্যান্ড / প্রতিষ্ঠানের নাম *'}
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    {lang === 'en' ? 'Brand / Business Name *' : 'ব্র্যান্ড / প্রতিষ্ঠানের নাম *'}
+                  </label>
+                  <span className="text-[10px] text-amber-400 font-mono">
+                    {lang === 'en' ? 'Letters only' : 'শুধুমাত্র অক্ষর'}
+                  </span>
+                </div>
                 <input
                   type="text"
                   required
                   value={formData.businessName}
-                  onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
+                  onChange={(e) => {
+                    // Strip out digits and prohibited symbols in real-time
+                    const cleaned = e.target.value.replace(/[\d]/g, '');
+                    setFormData({ ...formData, businessName: cleaned });
+                  }}
                   placeholder={lang === 'en' ? 'e.g. Dhaka Artisan House' : 'যেমন: ঢাকা ক্রাফটস'}
                   className="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-colors"
                 />
               </div>
 
-              {/* Contact Person */}
+              {/* Contact Person (Letters only) */}
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  {lang === 'en' ? 'Contact Person Name *' : 'যোগাযোগকারীর নাম *'}
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    {lang === 'en' ? 'Contact Person Name *' : 'যোগাযোগকারীর নাম *'}
+                  </label>
+                  <span className="text-[10px] text-amber-400 font-mono">
+                    {lang === 'en' ? 'Letters only' : 'শুধুমাত্র অক্ষর'}
+                  </span>
+                </div>
                 <input
                   type="text"
                   required
                   value={formData.contactName}
-                  onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
+                  onChange={(e) => {
+                    const cleaned = e.target.value.replace(/[\d]/g, '');
+                    setFormData({ ...formData, contactName: cleaned });
+                  }}
                   placeholder={lang === 'en' ? 'Full name' : 'পূর্ণ নাম'}
                   className="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-colors"
                 />
               </div>
 
-              {/* Phone */}
+              {/* Phone (Numbers only) */}
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  {lang === 'en' ? 'Phone Number *' : 'ফোন নম্বর *'}
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    {lang === 'en' ? 'Phone Number *' : 'ফোন নম্বর *'}
+                  </label>
+                  <span className="text-[10px] text-amber-400 font-mono">
+                    {lang === 'en' ? 'Numbers only' : 'শুধুমাত্র সংখ্যা'}
+                  </span>
+                </div>
                 <input
                   type="tel"
                   required
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  onChange={(e) => {
+                    // Allow only digits
+                    const cleaned = e.target.value.replace(/\D/g, '');
+                    setFormData({ ...formData, phone: cleaned });
+                  }}
                   placeholder="01XXXXXXXXX"
                   className="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-100 placeholder-slate-500 text-sm font-mono focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-colors"
                 />

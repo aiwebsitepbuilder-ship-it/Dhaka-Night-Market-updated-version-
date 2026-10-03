@@ -14,7 +14,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { Language, PageId } from '../types';
-import { UPCOMING_EVENTS, PREVIOUS_EVENTS } from '../data/content';
+import { useEvents } from '../context/EventsContext';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { ImagePlaceholder } from '../components/ImagePlaceholder';
 import { PlaceholderNotice } from '../components/PlaceholderNotice';
@@ -25,6 +25,7 @@ interface EventsPageProps {
 }
 
 export const EventsPage: React.FC<EventsPageProps> = ({ onNavigate, lang }) => {
+  const { upcomingEvents, previousEvents, currentUpcomingEvent } = useEvents();
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'ongoing' | 'previous'>('all');
   const [copied, setCopied] = useState(false);
 
@@ -54,7 +55,16 @@ export const EventsPage: React.FC<EventsPageProps> = ({ onNavigate, lang }) => {
       </div>
 
       {/* Countdown Card for Upcoming Event */}
-      <CountdownTimer lang={lang} />
+      <CountdownTimer
+        targetDate={currentUpcomingEvent.startDateIso}
+        eventName={currentUpcomingEvent.name}
+        eventNameBn={currentUpcomingEvent.nameBn}
+        venue={currentUpcomingEvent.location}
+        venueBn={currentUpcomingEvent.locationBn}
+        timeRange={currentUpcomingEvent.time}
+        timeRangeBn={currentUpcomingEvent.timeBn}
+        lang={lang}
+      />
 
       {/* Filter Tabs */}
       <div className="flex items-center justify-center">
@@ -110,12 +120,12 @@ export const EventsPage: React.FC<EventsPageProps> = ({ onNavigate, lang }) => {
               {lang === 'en' ? 'Upcoming Events' : 'আসন্ন ইভেন্ট'}
             </h2>
             <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono">
-              1 Scheduled
+              {upcomingEvents.length} Scheduled
             </span>
           </div>
 
           <div className="space-y-8">
-            {UPCOMING_EVENTS.map((event) => (
+            {upcomingEvents.map((event) => (
               <div
                 key={event.id}
                 className="rounded-2xl bg-[#0D152D] border border-amber-500/30 overflow-hidden shadow-xl"
@@ -263,12 +273,12 @@ export const EventsPage: React.FC<EventsPageProps> = ({ onNavigate, lang }) => {
               {lang === 'en' ? 'Previous Events Archive' : 'পূর্ববর্তী ইভেন্টসমূহ'}
             </h2>
             <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">
-              {PREVIOUS_EVENTS.length} Archived
+              {previousEvents.length} Archived
             </span>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {PREVIOUS_EVENTS.map((event) => (
+            {previousEvents.map((event) => (
               <div
                 key={event.id}
                 className="rounded-2xl bg-[#0D152D] border border-amber-500/20 hover:border-amber-500/50 overflow-hidden flex flex-col justify-between shadow-xl transition-all duration-300 group"

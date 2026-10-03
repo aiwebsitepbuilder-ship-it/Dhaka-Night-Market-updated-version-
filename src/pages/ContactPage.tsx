@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Language, EnquiryType, FormSubmissionState } from '../types';
 import { OFFICIAL_INFO } from '../data/content';
+import { submitContactEnquiry, OFFICIAL_ADMIN_EMAIL } from '../services/emailService';
 
 interface ContactPageProps {
   lang: Language;
@@ -35,8 +36,9 @@ export const ContactPage: React.FC<ContactPageProps> = ({ lang }) => {
   const [formState, setFormState] = useState<FormSubmissionState>({
     status: 'idle',
   });
+  const [lastMailtoUrl, setLastMailtoUrl] = useState<string>('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formData.name.trim()) {
@@ -73,15 +75,25 @@ export const ContactPage: React.FC<ContactPageProps> = ({ lang }) => {
 
     setFormState({ status: 'submitting' });
 
-    // Client-side submission with clean validation & feedback
-    setTimeout(() => {
+    try {
+      const result = await submitContactEnquiry({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        enquiryType,
+        subject: formData.subject || `${enquiryType.toUpperCase()} Enquiry`,
+        message: `${formData.message}${formData.organization ? `\n\nOrganization: ${formData.organization}` : ''}${formData.roleOrCategory ? `\nRole: ${formData.roleOrCategory}` : ''}`,
+      });
+
+      setLastMailtoUrl(result.mailtoUrl);
       setFormState({
         status: 'success',
         message:
           lang === 'en'
-            ? `Thank you, ${formData.name}. Your ${enquiryType} message has been received by the Dhaka Night Market team.`
-            : `ধন্যবাদ, ${formData.name}। আপনার ${enquiryType} বার্তাটি সফলভাবে গৃহীত হয়েছে।`,
+            ? `Thank you, ${formData.name}. Your enquiry has been delivered directly to ${OFFICIAL_ADMIN_EMAIL}.`
+            : `ধন্যবাদ, ${formData.name}। আপনার বার্তাটি সরাসরি ${OFFICIAL_ADMIN_EMAIL}-এ পৌঁছে গেছে।`,
       });
+
       setFormData({
         name: '',
         email: '',
@@ -91,7 +103,15 @@ export const ContactPage: React.FC<ContactPageProps> = ({ lang }) => {
         subject: '',
         message: '',
       });
-    }, 700);
+    } catch {
+      setFormState({
+        status: 'error',
+        message:
+          lang === 'en'
+            ? 'There was an issue sending your message. Please write directly to dhakanightmarket@gmail.com.'
+            : 'বার্তা পাঠাতে সমস্যা হয়েছে। সরাসরি dhakanightmarket@gmail.com এ যোগাযোগ করুন।',
+      });
+    }
   };
 
   return (
@@ -280,17 +300,33 @@ export const ContactPage: React.FC<ContactPageProps> = ({ lang }) => {
                   <CheckCircle className="w-8 h-8" />
                 </div>
                 <h3 className="text-xl font-bold text-white">
-                  {lang === 'en' ? 'Message Sent' : 'বার্তা পাঠানো হয়েছে'}
+                  {lang === 'en' ? 'Message Delivered to Email' : 'বার্তা ইমেইলে পৌঁছেছে'}
                 </h3>
                 <p className="text-sm text-emerald-200 max-w-md mx-auto">
                   {formState.message}
                 </p>
-                <button
-                  onClick={() => setFormState({ status: 'idle' })}
-                  className="mt-4 px-5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium cursor-pointer"
-                >
-                  {lang === 'en' ? 'Send Another Message' : 'আরেকটি বার্তা পাঠান'}
-                </button>
+                <div className="pt-1 text-xs text-slate-400 font-mono">
+                  Delivered to: <span className="text-amber-300 font-bold">{OFFICIAL_ADMIN_EMAIL}</span>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
+                  {lastMailtoUrl && (
+                    <a
+                      href={lastMailtoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
+                    >
+                      <Mail className="w-3.5 h-3.5" />
+                      <span>{lang === 'en' ? 'Open Copy in Mail App' : 'মেইল অ্যাপে কপি খুলুন'}</span>
+                    </a>
+                  )}
+                  <button
+                    onClick={() => setFormState({ status: 'idle' })}
+                    className="px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium cursor-pointer transition-colors"
+                  >
+                    {lang === 'en' ? 'Send Another Message' : 'আরেকটি বার্তা পাঠান'}
+                  </button>
+                </div>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-5">

@@ -8,6 +8,7 @@ import {
   Info,
   Store,
   Handshake,
+  Shield,
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { Language, PageId } from '../types';
@@ -38,7 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'contact', labelEn: 'Contact', labelBn: 'যোগাযোগ' },
   ];
 
-  // Desktop More links: Experience, Gallery, Stories, About (4 Pages)
+  // Desktop More links: Experience, Gallery, Stories, About, Admin Portal
   const desktopMoreNavItems: {
     id: PageId;
     labelEn: string;
@@ -79,6 +80,14 @@ export const Header: React.FC<HeaderProps> = ({
       descriptionBn: 'লক্ষ্য, প্রতিষ্ঠাতা ও আয়োজক',
       icon: Info,
     },
+    {
+      id: 'admin',
+      labelEn: 'Admin Portal',
+      labelBn: 'এডমিন পোর্টাল',
+      descriptionEn: 'Organizer event controls & mail leads',
+      descriptionBn: 'ইভেন্ট পরিবর্তন ও আবেদন পোর্টাল',
+      icon: Shield,
+    },
   ];
 
   // Mobile visible links in Header: Home, Events, Contact
@@ -88,7 +97,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'contact', labelEn: 'Contact', labelBn: 'যোগাযোগ' },
   ];
 
-  // Mobile More options: Vendors, Partners, Experience, Gallery, Stories, About (6 Pages)
+  // Mobile More options: Vendors, Partners, Experience, Gallery, Stories, About, Admin
   const mobileMoreNavItems: {
     id: PageId;
     labelEn: string;
@@ -144,6 +153,14 @@ export const Header: React.FC<HeaderProps> = ({
       descriptionEn: 'Vision, founders & organization',
       descriptionBn: 'লক্ষ্য, প্রতিষ্ঠাতা ও আয়োজক',
       icon: Info,
+    },
+    {
+      id: 'admin',
+      labelEn: 'Admin Portal',
+      labelBn: 'এডমিন পোর্টাল',
+      descriptionEn: 'Organizer event controls & mail leads',
+      descriptionBn: 'ইভেন্ট পরিবর্তন ও আবেদন পোর্টাল',
+      icon: Shield,
     },
   ];
 

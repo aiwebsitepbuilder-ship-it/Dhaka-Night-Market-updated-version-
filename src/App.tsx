@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { PageId, Language } from './types';
+import { EventsProvider } from './context/EventsContext';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { HomePage } from './pages/HomePage';
@@ -16,6 +17,7 @@ import { PartnersPage } from './pages/PartnersPage';
 import { StoriesPage } from './pages/StoriesPage';
 import { AboutPage } from './pages/AboutPage';
 import { ContactPage } from './pages/ContactPage';
+import { AdminPage } from './pages/AdminPage';
 
 export default function App() {
   // Determine initial page from URL hash or path
@@ -31,6 +33,7 @@ export default function App() {
       'stories',
       'about',
       'contact',
+      'admin',
     ];
     if (validPages.includes(hash as PageId)) {
       return hash as PageId;
@@ -101,6 +104,10 @@ export default function App() {
         en: 'Contact & Location – Dhaka Night Market',
         bn: 'যোগাযোগ ও অবস্থান – ঢাকা নাইট মার্কেট',
       },
+      admin: {
+        en: 'Admin & Organizer Portal – Dhaka Night Market',
+        bn: 'এডমিন ও কন্ট্রোল পোর্টাল – ঢাকা নাইট মার্কেট',
+      },
     };
 
     const currentTitle = pageTitles[currentPage]?.[lang] ?? pageTitles.home[lang];
@@ -127,42 +134,47 @@ export default function App() {
   };
 
   return (
-    <div
-      className={`min-h-screen flex flex-col bg-[#070B19] text-slate-100 selection:bg-amber-500 selection:text-slate-950 ${
-        lang === 'bn' ? 'font-bangla' : 'font-sans'
-      }`}
-    >
-      {/* Top Navigation */}
-      <Header
-        currentPage={currentPage}
-        onNavigate={handleNavigate}
-        lang={lang}
-        onToggleLang={handleToggleLang}
-      />
+    <EventsProvider>
+      <div
+        className={`min-h-screen flex flex-col bg-[#070B19] text-slate-100 selection:bg-amber-500 selection:text-slate-950 ${
+          lang === 'bn' ? 'font-bangla' : 'font-sans'
+        }`}
+      >
+        {/* Top Navigation */}
+        <Header
+          currentPage={currentPage}
+          onNavigate={handleNavigate}
+          lang={lang}
+          onToggleLang={handleToggleLang}
+        />
 
-      {/* Main Page View */}
-      <main className="flex-1 w-full">
-        {currentPage === 'home' && (
-          <HomePage onNavigate={handleNavigate} lang={lang} />
-        )}
-        {currentPage === 'events' && (
-          <EventsPage onNavigate={handleNavigate} lang={lang} />
-        )}
-        {currentPage === 'experience' && (
-          <ExperiencePage onNavigate={handleNavigate} lang={lang} />
-        )}
-        {currentPage === 'gallery' && <GalleryPage lang={lang} />}
-        {currentPage === 'vendors' && <VendorsPage lang={lang} />}
-        {currentPage === 'partners' && <PartnersPage lang={lang} />}
-        {currentPage === 'stories' && <StoriesPage lang={lang} />}
-        {currentPage === 'about' && (
-          <AboutPage onNavigate={handleNavigate} lang={lang} />
-        )}
-        {currentPage === 'contact' && <ContactPage lang={lang} />}
-      </main>
+        {/* Main Page View */}
+        <main className="flex-1 w-full">
+          {currentPage === 'home' && (
+            <HomePage onNavigate={handleNavigate} lang={lang} />
+          )}
+          {currentPage === 'events' && (
+            <EventsPage onNavigate={handleNavigate} lang={lang} />
+          )}
+          {currentPage === 'experience' && (
+            <ExperiencePage onNavigate={handleNavigate} lang={lang} />
+          )}
+          {currentPage === 'gallery' && <GalleryPage lang={lang} />}
+          {currentPage === 'vendors' && <VendorsPage lang={lang} />}
+          {currentPage === 'partners' && <PartnersPage lang={lang} />}
+          {currentPage === 'stories' && <StoriesPage lang={lang} />}
+          {currentPage === 'about' && (
+            <AboutPage onNavigate={handleNavigate} lang={lang} />
+          )}
+          {currentPage === 'contact' && <ContactPage lang={lang} />}
+          {currentPage === 'admin' && (
+            <AdminPage onNavigate={handleNavigate} lang={lang} />
+          )}
+        </main>
 
-      {/* Footer */}
-      <Footer onNavigate={handleNavigate} lang={lang} />
-    </div>
+        {/* Footer */}
+        <Footer onNavigate={handleNavigate} lang={lang} />
+      </div>
+    </EventsProvider>
   );
 }
