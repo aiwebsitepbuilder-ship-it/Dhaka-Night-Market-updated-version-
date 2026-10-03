@@ -7,7 +7,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+// AI Studio nginx proxies external port 8080 to internal port 3000
+const PORT = 3000;
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -115,6 +116,10 @@ app.post('/api/test-email', (req, res) => {
 const distDir = path.resolve(__dirname, 'dist');
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir));
+  app.use('/Dhaka-Night-Market', express.static(distDir));
+  app.get('/Dhaka-Night-Market*', (req, res) => {
+    res.sendFile(path.resolve(distDir, 'index.html'));
+  });
   app.get('*', (req, res) => {
     res.sendFile(path.resolve(distDir, 'index.html'));
   });

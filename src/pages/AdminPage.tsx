@@ -42,24 +42,28 @@ import {
   deleteEnquiry,
   generateMailtoUrl,
 } from '../services/emailService';
+import theWeddingShowImg from '../assets/images/the_wedding_show_1790767339554.jpg';
+import summerEditionBannerImg from '../assets/images/summer_edition_banner_1790770101633.jpg';
+import season2SehriBannerImg from '../assets/images/season_2_sehri_banner_1790770541419.jpg';
+import dhakaSplendorBannerImg from '../assets/images/dhaka_splendor_banner_1790770764936.jpg';
 
 // Preset banner options from existing assets
 const PRESET_BANNERS = [
   {
     label: 'The Wedding Show Banner',
-    url: '/src/assets/images/the_wedding_show_1790767339554.jpg',
+    url: theWeddingShowImg,
   },
   {
     label: 'Summer Edition Banner',
-    url: '/src/assets/images/summer_edition_banner_1790770101633.jpg',
+    url: summerEditionBannerImg,
   },
   {
     label: 'Season 2 Sehri Banner',
-    url: '/src/assets/images/season_2_sehri_banner_1790770541419.jpg',
+    url: season2SehriBannerImg,
   },
   {
     label: 'Dhaka Splendor Banner',
-    url: '/src/assets/images/dhaka_splendor_banner_1790770764936.jpg',
+    url: dhakaSplendorBannerImg,
   },
 ];
 

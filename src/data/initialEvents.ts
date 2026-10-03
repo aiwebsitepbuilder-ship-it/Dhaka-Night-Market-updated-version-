@@ -1,4 +1,8 @@
 import { EventDetail } from '../types';
+import theWeddingShowImg from '../assets/images/the_wedding_show_1790767339554.jpg';
+import summerEditionBannerImg from '../assets/images/summer_edition_banner_1790770101633.jpg';
+import season2SehriBannerImg from '../assets/images/season_2_sehri_banner_1790770541419.jpg';
+import dhakaSplendorBannerImg from '../assets/images/dhaka_splendor_banner_1790770764936.jpg';
 
 export const INITIAL_EVENTS: EventDetail[] = [
   {
@@ -30,7 +34,7 @@ export const INITIAL_EVENTS: EventDetail[] = [
       ],
     },
     status: 'upcoming',
-    imageUrl: '/src/assets/images/the_wedding_show_1790767339554.jpg',
+    imageUrl: theWeddingShowImg,
     imagePlaceholderText: '[Official Event Poster / Banner Placeholder - Wedding & Lifestyle Exhibition]',
     notes: 'Free entry for all visitors. Join us for a curated exhibition of bridal wear, gold & diamond jewelry, and premier lifestyle collections.',
     notesBn: 'সকল দর্শনার্থীদের জন্য ফ্রি এন্ট্রি। ব্রাইডাল পোশাক, স্বর্ণ ও হীরার অলঙ্কার এবং প্রিমিয়াম লাইফস্টাইল কালেকশনের কিউরেটেড প্রদর্শনীতে আপনাকে স্বাগতম।',
@@ -53,7 +57,7 @@ export const INITIAL_EVENTS: EventDetail[] = [
     admissionBn: 'সবার জন্য উন্মুক্ত (ফ্রি এন্ট্রি)',
     theme: "Bangladesh's first-ever Summer Night Market experience — bigger, bolder, and unmissable",
     themeBn: 'বাংলাদেশের প্রথম সামার নাইট মার্কেট অভিজ্ঞতা — আরও জমকালো ও বর্ণাঢ্য আয়োজন',
-    imageUrl: '/src/assets/images/summer_edition_banner_1790770101633.jpg',
+    imageUrl: summerEditionBannerImg,
     footfall: '15,000+ Visitors',
     brandCount: '100+ Lifestyle Brands',
     foodBrandCount: '15+ Food Brands',
@@ -101,7 +105,7 @@ export const INITIAL_EVENTS: EventDetail[] = [
     admissionBn: 'সবার জন্য উন্মুক্ত (ফ্রি এন্ট্রি)',
     theme: 'Three atmospheric nights running until Sehri, bringing together festive retail, Ramadan delicacies, and live entertainment.',
     themeBn: 'সেহরি পর্যন্ত টানা তিন রাতের মহোৎসব, যাতে মিলেছিল উৎসবমুখর কেনাকাটা, রমাদানের বাহারি খাবার ও লাইভ বিনোদন।',
-    imageUrl: '/src/assets/images/season_2_sehri_banner_1790770541419.jpg',
+    imageUrl: season2SehriBannerImg,
     footfall: '30,000+ Footfall Across 3 Days',
     brandCount: '150+ Brands',
     foodBrandCount: '25+ Sehri & Food Stalls',
@@ -144,7 +148,7 @@ export const INITIAL_EVENTS: EventDetail[] = [
     admissionBn: 'রেজিস্ট্রেশন সাপেক্ষে ফ্রি প্রবেশ',
     theme: 'Winter bridal launches, bespoke gold & diamond ornaments, and artisanal winter cuisines.',
     themeBn: 'শীতকালীন ব্রাইডাল কালেকশন, স্বর্ণ ও হিরের অলঙ্কার এবং ঐতিহ্যবাহী মুখরোচক খাবারের মিলনমেলা।',
-    imageUrl: '/src/assets/images/dhaka_splendor_banner_1790770764936.jpg',
+    imageUrl: dhakaSplendorBannerImg,
     footfall: '12,000+ Footfall',
     brandCount: '80+ Premium Labels',
     foodBrandCount: '12+ Specialty Food Brands',

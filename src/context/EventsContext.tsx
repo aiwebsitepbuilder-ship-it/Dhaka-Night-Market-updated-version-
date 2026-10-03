@@ -29,13 +29,32 @@ interface EventsContextType {
 
 const EventsContext = createContext<EventsContextType | undefined>(undefined);
 
+function normalizeEvents(list: EventDetail[]): EventDetail[] {
+  const defaultImageMap: Record<string, string | undefined> = {
+    'wedding-lifestyle-exhibition-2026': INITIAL_EVENTS[0]?.imageUrl,
+    'dhaka-night-market-summer-edition': INITIAL_EVENTS[1]?.imageUrl,
+    'dhaka-night-market-season-2': INITIAL_EVENTS[2]?.imageUrl,
+    'dhaka-splendor-fest-2025': INITIAL_EVENTS[3]?.imageUrl,
+  };
+
+  return list.map((ev) => {
+    if (ev.imageUrl?.startsWith('/src/assets/images/')) {
+      return {
+        ...ev,
+        imageUrl: defaultImageMap[ev.id] || INITIAL_EVENTS[0]?.imageUrl || ev.imageUrl,
+      };
+    }
+    return ev;
+  });
+}
+
 function getInitialEventsFromStorage(): EventDetail[] {
   try {
     const stored = localStorage.getItem(EVENTS_STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        return normalizeEvents(parsed);
       }
     }
   } catch (err) {
@@ -65,10 +84,11 @@ export const EventsProvider: React.FC<{ children: ReactNode }> = ({
             Array.isArray(serverEvents) &&
             serverEvents.length > 0
           ) {
-            setEvents(serverEvents);
+            const normalized = normalizeEvents(serverEvents);
+            setEvents(normalized);
             localStorage.setItem(
               EVENTS_STORAGE_KEY,
-              JSON.stringify(serverEvents)
+              JSON.stringify(normalized)
             );
           }
         }
