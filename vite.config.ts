@@ -126,6 +126,37 @@ function apiMiddlewarePlugin() {
           return;
         }
 
+        // POST /api/auth/change-username
+        if (url === '/api/auth/change-username' && req.method === 'POST') {
+          if (!checkAdminAuth(req, res)) return;
+          let body = '';
+          req.on('data', (chunk: any) => {
+            body += chunk;
+          });
+          req.on('end', () => {
+            try {
+              const { newUsername } = JSON.parse(body || '{}');
+              if (!newUsername || typeof newUsername !== 'string' || !newUsername.trim()) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ error: 'Username cannot be empty.' }));
+                return;
+              }
+              const configPath = path.resolve(process.cwd(), 'data', 'admin-config.json');
+              const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf-8')) : {};
+              config.username = newUsername.trim();
+              config.updatedAt = new Date().toISOString();
+              fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ success: true, message: 'Username updated.' }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: err.message }));
+            }
+          });
+          return;
+        }
+
         // POST /api/auth/forgot-password
         if (url === '/api/auth/forgot-password' && req.method === 'POST') {
           let body = '';

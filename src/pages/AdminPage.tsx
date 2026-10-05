@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Lock,
   Unlock,
@@ -34,6 +34,7 @@ import {
   Search,
   Filter,
   User,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { EventDetail, Language, PageId, EnquiryRecord, EnquiryStatus } from '../types';
 import { useEvents } from '../context/EventsContext';
@@ -73,6 +74,58 @@ const PRESET_BANNERS = [
 const PASSCODE_STORAGE_KEY = 'dnm_admin_passcode';
 const SESSION_STORAGE_KEY = 'dnm_admin_session';
 const USERNAME_STORAGE_KEY = 'dnm_admin_username';
+
+/**
+ * Optimizes and resizes any user-uploaded image client-side to fit within
+ * memory & storage limits while preserving high-definition visual quality.
+ */
+function processAndOptimizeImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read image file.'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => {
+        resolve(reader.result as string);
+      };
+      img.onload = () => {
+        const MAX_WIDTH = 1600;
+        const MAX_HEIGHT = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+          if (width / height > MAX_WIDTH / MAX_HEIGHT) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          } else {
+            width = Math.round((width * MAX_HEIGHT) / height);
+            height = MAX_HEIGHT;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(reader.result as string);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        try {
+          const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          resolve(optimizedDataUrl);
+        } catch {
+          resolve(reader.result as string);
+        }
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 interface AdminPageProps {
   onNavigate: (page: PageId) => void;
@@ -127,8 +180,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [eventFormData, setEventFormData] = useState<Partial<EventDetail>>({});
   const [offeringInputEn, setOfferingInputEn] = useState('');
-  const [offeringInputBn, setOfferingInputBn] = useState('');
   const [saveSuccessMessage, setSaveSuccessMessage] = useState('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Settings State
   const [currentPasscode, setCurrentPasscode] = useState<string>(() => {
@@ -139,6 +194,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
   const [showNewPasscode, setShowNewPasscode] = useState(false);
   const [showConfirmPasscode, setShowConfirmPasscode] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState('');
+  const [newUsername, setNewUsername] = useState('');
+  const [usernameMessage, setUsernameMessage] = useState('');
   const [testMailStatus, setTestMailStatus] = useState<string | null>(null);
 
   // Load inquiries whenever authenticated or tab switched
@@ -282,6 +339,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
       notesBn: '',
       mapUrl: 'https://maps.google.com/?q=Sheraton+Banani+Dhaka',
       facebookEventUrl: 'https://www.facebook.com/dhakanightmarket/',
+      instagramUrl: 'https://www.instagram.com/dhakanightmarket/',
     });
     setIsEditing(true);
   };
@@ -295,16 +353,29 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
   const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!eventFormData.name?.trim()) {
-      alert('Event name in English is required.');
+      alert('Event title in English is required.');
       return;
     }
 
+    const sanitizedEvent: Partial<EventDetail> = {
+      ...eventFormData,
+      nameBn: eventFormData.nameBn?.trim() || eventFormData.name?.trim() || '',
+      datesBn: eventFormData.datesBn?.trim() || eventFormData.dates?.trim() || '',
+      timeBn: eventFormData.timeBn?.trim() || eventFormData.time?.trim() || '',
+      locationBn: eventFormData.locationBn?.trim() || eventFormData.location?.trim() || '',
+      admissionBn: eventFormData.admissionBn?.trim() || eventFormData.admission?.trim() || '',
+      notesBn: eventFormData.notesBn?.trim() || eventFormData.notes?.trim() || '',
+      mapUrl: eventFormData.mapUrl || '',
+      facebookEventUrl: eventFormData.facebookEventUrl || '',
+      instagramUrl: eventFormData.instagramUrl || '',
+    };
+
     try {
       if (editingEventId) {
-        await updateEvent(editingEventId, eventFormData);
+        await updateEvent(editingEventId, sanitizedEvent);
         setSaveSuccessMessage('Event updated successfully! All pages are synchronized.');
       } else {
-        await addEvent(eventFormData as Omit<EventDetail, 'id'>);
+        await addEvent(sanitizedEvent as Omit<EventDetail, 'id'>);
         setSaveSuccessMessage('New event created successfully! It is now active on the website.');
       }
 
@@ -331,15 +402,15 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
     if (!offeringInputEn.trim()) return;
     const currentEn = eventFormData.offerings?.en || [];
     const currentBn = eventFormData.offerings?.bn || [];
+    const itemText = offeringInputEn.trim();
     setEventFormData({
       ...eventFormData,
       offerings: {
-        en: [...currentEn, offeringInputEn.trim()],
-        bn: [...currentBn, offeringInputBn.trim() || offeringInputEn.trim()],
+        en: [...currentEn, itemText],
+        bn: [...currentBn, itemText],
       },
     });
     setOfferingInputEn('');
-    setOfferingInputBn('');
   };
 
   const handleRemoveOffering = (index: number) => {
@@ -354,23 +425,33 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
     });
   };
 
-  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Image file size exceeds 5MB limit. Please select a smaller image.');
+    // Reset input so user can re-upload or select same file
+    e.target.value = '';
+
+    if (!file.type.startsWith('image/')) {
+      setImageUploadError('Please select a valid image file (JPEG, PNG, WebP, GIF, etc.).');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setEventFormData({
-        ...eventFormData,
-        imageUrl: reader.result as string,
-      });
-    };
-    reader.readAsDataURL(file);
+    setIsUploadingImage(true);
+    setImageUploadError('');
+
+    try {
+      const optimizedDataUrl = await processAndOptimizeImage(file);
+      setEventFormData((prev) => ({
+        ...prev,
+        imageUrl: optimizedDataUrl,
+      }));
+    } catch (err: any) {
+      console.error('Image upload failed:', err);
+      setImageUploadError('Could not process this image file. Please try another image.');
+    } finally {
+      setIsUploadingImage(false);
+    }
   };
 
   // Enquiries Status Update
@@ -467,15 +548,15 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
     reader.readAsText(file);
   };
 
-  // Change Passcode
+  // Change Password
   const handleChangePasscode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPasscode.length < 4) {
-      setSettingsMessage('Passcode must be at least 4 characters long.');
+      setSettingsMessage('Password must be at least 4 characters long.');
       return;
     }
     if (newPasscode !== confirmPasscode) {
-      setSettingsMessage('New passcode and confirm passcode do not match.');
+      setSettingsMessage('New password and confirm password do not match.');
       return;
     }
 
@@ -497,8 +578,44 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
     setCurrentPasscode(newPasscode);
     setNewPasscode('');
     setConfirmPasscode('');
-    setSettingsMessage('Admin passcode updated successfully!');
+    setSettingsMessage('Admin password updated successfully!');
     setTimeout(() => setSettingsMessage(''), 4000);
+  };
+
+  // Change Username
+  const handleChangeUsername = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanUser = newUsername.trim();
+    if (!cleanUser) {
+      setUsernameMessage('Username cannot be empty.');
+      return;
+    }
+    if (cleanUser.length < 3) {
+      setUsernameMessage('Username must be at least 3 characters long.');
+      return;
+    }
+
+    const token = safeSessionStorage.getItem('dnm_admin_token');
+    try {
+      await fetch('/api/auth/change-username', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token || ''}`,
+        },
+        body: JSON.stringify({ newUsername: cleanUser }),
+      });
+    } catch {
+      // Backend optional in static mode
+    }
+
+    safeLocalStorage.setItem(USERNAME_STORAGE_KEY, cleanUser);
+    safeSessionStorage.setItem(USERNAME_STORAGE_KEY, cleanUser);
+    setLoggedUsername(cleanUser);
+    setUsernameInput(cleanUser);
+    setNewUsername('');
+    setUsernameMessage(`Admin username updated successfully to "${cleanUser}"!`);
+    setTimeout(() => setUsernameMessage(''), 4000);
   };
 
   // Send Test Mail Ping
@@ -1208,86 +1325,133 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
             </div>
           </div>
 
-          {/* Change Admin Passcode */}
+          {/* Change Admin Password & Username */}
           <div className="p-6 rounded-2xl bg-[#0D152D] border border-amber-500/20 space-y-6">
             <div className="space-y-1">
               <h2 className="text-lg font-bold text-white font-display flex items-center gap-2">
                 <Key className="w-5 h-5 text-amber-400" />
-                <span>Change Admin Passcode</span>
+                <span>Change Admin Password & Username</span>
               </h2>
               <p className="text-xs text-slate-300">
-                Update the passcode used to unlock this control portal.
+                Update the password and username used to unlock and manage this control portal.
               </p>
             </div>
 
-            <form onSubmit={handleChangePasscode} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                  New Passcode
-                </label>
-                <div className="relative">
-                  <input
-                    type={showNewPasscode ? 'text' : 'password'}
-                    value={newPasscode}
-                    onChange={(e) => setNewPasscode(e.target.value)}
-                    placeholder="Enter new passcode..."
-                    className="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowNewPasscode(!showNewPasscode)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-400 p-1 cursor-pointer transition-colors"
-                    title={showNewPasscode ? 'Hide passcode' : 'Show passcode'}
-                    aria-label={showNewPasscode ? 'Hide passcode' : 'Show passcode'}
-                  >
-                    {showNewPasscode ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
+            {/* Change Username Sub-Section */}
+            <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
+                  <User className="w-4 h-4 text-amber-400" />
+                  <span>Change Admin Username</span>
                 </div>
+                <span className="text-[11px] text-slate-400">
+                  Current: <strong className="text-amber-300 font-mono">{loggedUsername}</strong>
+                </span>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                  Confirm New Passcode
-                </label>
-                <div className="relative">
+              <form onSubmit={handleChangeUsername} className="space-y-2.5">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    New Username
+                  </label>
                   <input
-                    type={showConfirmPasscode ? 'text' : 'password'}
-                    value={confirmPasscode}
-                    onChange={(e) => setConfirmPasscode(e.target.value)}
-                    placeholder="Repeat new passcode..."
-                    className="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                    type="text"
+                    value={newUsername}
+                    onChange={(e) => setNewUsername(e.target.value)}
+                    placeholder="Enter new username (e.g. admin or organizer)..."
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-sans"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPasscode(!showConfirmPasscode)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-400 p-1 cursor-pointer transition-colors"
-                    title={showConfirmPasscode ? 'Hide passcode' : 'Show passcode'}
-                    aria-label={showConfirmPasscode ? 'Hide passcode' : 'Show passcode'}
-                  >
-                    {showConfirmPasscode ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
                 </div>
+
+                {usernameMessage && (
+                  <p className="text-xs text-amber-300 font-semibold">{usernameMessage}</p>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 border border-amber-500/30 font-bold text-xs uppercase tracking-wider cursor-pointer transition-colors"
+                >
+                  Update Username
+                </button>
+              </form>
+            </div>
+
+            {/* Change Password Sub-Section */}
+            <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
+                <Lock className="w-4 h-4 text-amber-400" />
+                <span>Change Admin Password</span>
               </div>
 
-              {settingsMessage && (
-                <p className="text-xs text-amber-300 font-semibold">{settingsMessage}</p>
-              )}
+              <form onSubmit={handleChangePasscode} className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showNewPasscode ? 'text' : 'password'}
+                      value={newPasscode}
+                      onChange={(e) => setNewPasscode(e.target.value)}
+                      placeholder="Enter new password..."
+                      className="w-full px-3.5 py-2 pr-10 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPasscode(!showNewPasscode)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-400 p-1 cursor-pointer transition-colors"
+                      title={showNewPasscode ? 'Hide password' : 'Show password'}
+                      aria-label={showNewPasscode ? 'Hide password' : 'Show password'}
+                    >
+                      {showNewPasscode ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
 
-              <button
-                type="submit"
-                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs uppercase tracking-wider shadow cursor-pointer transition-colors"
-              >
-                Update Passcode
-              </button>
-            </form>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    Confirm New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmPasscode ? 'text' : 'password'}
+                      value={confirmPasscode}
+                      onChange={(e) => setConfirmPasscode(e.target.value)}
+                      placeholder="Repeat new password..."
+                      className="w-full px-3.5 py-2 pr-10 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPasscode(!showConfirmPasscode)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-400 p-1 cursor-pointer transition-colors"
+                      title={showConfirmPasscode ? 'Hide password' : 'Show password'}
+                      aria-label={showConfirmPasscode ? 'Hide password' : 'Show password'}
+                    >
+                      {showConfirmPasscode ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {settingsMessage && (
+                  <p className="text-xs text-amber-300 font-semibold">{settingsMessage}</p>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs uppercase tracking-wider shadow cursor-pointer transition-colors"
+                >
+                  Update Password
+                </button>
+              </form>
+            </div>
           </div>
 
           {/* Backup & Restore Data */}
@@ -1366,38 +1530,23 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
 
             {/* Modal Form Body */}
             <form onSubmit={handleSaveEvent} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
-              {/* Row 1: Event Name (EN & BN) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                    Event Title (English) *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={eventFormData.name || ''}
-                    onChange={(e) => setEventFormData({ ...eventFormData, name: e.target.value })}
-                    placeholder="e.g. Wedding & Lifestyle Exhibition featuring House of Bengal"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                    Event Title (Bangla)
-                  </label>
-                  <input
-                    type="text"
-                    value={eventFormData.nameBn || ''}
-                    onChange={(e) => setEventFormData({ ...eventFormData, nameBn: e.target.value })}
-                    placeholder="বাংলা শিরোনাম..."
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-bangla"
-                  />
-                </div>
+              {/* Row 1: Event Title (English only) */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                  Event Title *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={eventFormData.name || ''}
+                  onChange={(e) => setEventFormData({ ...eventFormData, name: e.target.value })}
+                  placeholder="e.g. Wedding & Lifestyle Exhibition featuring House of Bengal"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-sans"
+                />
               </div>
 
               {/* Row 2: Status & Admission */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
                     Event Status *
@@ -1410,9 +1559,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
                         status: e.target.value as EventDetail['status'],
                       })
                     }
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 cursor-pointer"
                   >
-                    <option value="upcoming">Upcoming (Active for Countdown)</option>
+                    <option value="upcoming">Upcoming (Active for Live Countdown Clock)</option>
                     <option value="ongoing">Ongoing (Currently Live)</option>
                     <option value="previous">Previous (Archived Edition)</option>
                   </select>
@@ -1420,56 +1569,30 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                    Admission (English)
+                    Admission
                   </label>
                   <input
                     type="text"
                     value={eventFormData.admission || ''}
                     onChange={(e) => setEventFormData({ ...eventFormData, admission: e.target.value })}
-                    placeholder="e.g. Free entry"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                    Admission (Bangla)
-                  </label>
-                  <input
-                    type="text"
-                    value={eventFormData.admissionBn || ''}
-                    onChange={(e) => setEventFormData({ ...eventFormData, admissionBn: e.target.value })}
-                    placeholder="ফ্রি এন্ট্রি"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-bangla"
+                    placeholder="e.g. Free entry / By registration"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-sans"
                   />
                 </div>
               </div>
 
               {/* Row 3: Dates & Countdown ISO Start */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                    Dates Display Text (EN)
+                    Dates Display Text
                   </label>
                   <input
                     type="text"
                     value={eventFormData.dates || ''}
                     onChange={(e) => setEventFormData({ ...eventFormData, dates: e.target.value })}
                     placeholder="e.g. October 9–10, 2026"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                    Dates Display Text (BN)
-                  </label>
-                  <input
-                    type="text"
-                    value={eventFormData.datesBn || ''}
-                    onChange={(e) => setEventFormData({ ...eventFormData, datesBn: e.target.value })}
-                    placeholder="৯–১০ অক্টোবর ২০২৬"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-bangla"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-sans"
                   />
                 </div>
 
@@ -1492,95 +1615,139 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                    Time Range (EN & BN)
+                    Time Range
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      value={eventFormData.time || ''}
-                      onChange={(e) => setEventFormData({ ...eventFormData, time: e.target.value })}
-                      placeholder="12:00 PM – 12:00 AM"
-                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white"
-                    />
-                    <input
-                      type="text"
-                      value={eventFormData.timeBn || ''}
-                      onChange={(e) => setEventFormData({ ...eventFormData, timeBn: e.target.value })}
-                      placeholder="দুপুর ১২:০০ – রাত ১২:০০"
-                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white font-bangla"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    value={eventFormData.time || ''}
+                    onChange={(e) => setEventFormData({ ...eventFormData, time: e.target.value })}
+                    placeholder="e.g. 12:00 PM – 12:00 AM"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-sans"
+                  />
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                    Venue / Location (EN & BN)
+                    Venue / Location
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      value={eventFormData.location || ''}
-                      onChange={(e) => setEventFormData({ ...eventFormData, location: e.target.value })}
-                      placeholder="Grand Ballroom, Sheraton Banani"
-                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white"
-                    />
-                    <input
-                      type="text"
-                      value={eventFormData.locationBn || ''}
-                      onChange={(e) => setEventFormData({ ...eventFormData, locationBn: e.target.value })}
-                      placeholder="গ্র্যান্ড বলরুম, শেরাটন বনানী"
-                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white font-bangla"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    value={eventFormData.location || ''}
+                    onChange={(e) => setEventFormData({ ...eventFormData, location: e.target.value })}
+                    placeholder="e.g. Grand Ballroom, Sheraton Banani, Dhaka"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-sans"
+                  />
                 </div>
               </div>
 
-              {/* Row 5: Banner Image Selection */}
-              <div className="space-y-3 p-4 rounded-xl bg-slate-900/60 border border-slate-800">
-                <label className="block text-xs font-semibold text-slate-200 uppercase tracking-wider">
-                  Event Banner Image
-                </label>
-
-                {/* Preset Banner Selector */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {PRESET_BANNERS.map((preset) => (
-                    <button
-                      type="button"
-                      key={preset.label}
-                      onClick={() => setEventFormData({ ...eventFormData, imageUrl: preset.url })}
-                      className={`p-2 rounded-xl border text-left cursor-pointer transition-all ${
-                        eventFormData.imageUrl === preset.url
-                          ? 'border-amber-400 bg-amber-500/10'
-                          : 'border-slate-800 hover:border-slate-700 bg-slate-900'
-                      }`}
-                    >
-                      <div className="h-14 rounded-lg overflow-hidden bg-black mb-1.5">
-                        <img src={preset.url} alt={preset.label} className="w-full h-full object-cover" />
-                      </div>
-                      <p className="text-[11px] font-semibold text-slate-300 truncate">{preset.label}</p>
-                    </button>
-                  ))}
+              {/* Row 5: Banner Image Selection & Device File Upload */}
+              <div className="space-y-4 p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-200 uppercase tracking-wider">
+                    Event Banner Image
+                  </label>
+                  <span className="text-[11px] text-amber-300">
+                    Supports any device image (JPG, PNG, WebP, GIF)
+                  </span>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
-                  <div className="w-full">
-                    <input
-                      type="text"
-                      value={eventFormData.imageUrl || ''}
-                      onChange={(e) => setEventFormData({ ...eventFormData, imageUrl: e.target.value })}
-                      placeholder="Or enter custom Image URL / Link..."
-                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white"
-                    />
+                {/* Preset Banner Selector */}
+                <div>
+                  <p className="text-[11px] text-slate-400 mb-2">Preset High-Resolution Banners:</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {PRESET_BANNERS.map((preset) => (
+                      <button
+                        type="button"
+                        key={preset.label}
+                        onClick={() => setEventFormData({ ...eventFormData, imageUrl: preset.url })}
+                        className={`p-2 rounded-xl border text-left cursor-pointer transition-all ${
+                          eventFormData.imageUrl === preset.url
+                            ? 'border-amber-400 bg-amber-500/10'
+                            : 'border-slate-800 hover:border-slate-700 bg-slate-900'
+                        }`}
+                      >
+                        <div className="h-14 rounded-lg overflow-hidden bg-black mb-1.5">
+                          <img src={preset.url} alt={preset.label} className="w-full h-full object-cover" />
+                        </div>
+                        <p className="text-[11px] font-semibold text-slate-300 truncate">{preset.label}</p>
+                      </button>
+                    ))}
                   </div>
-                  <label className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold shrink-0 cursor-pointer border border-slate-700">
-                    <span>Upload Image File</span>
+                </div>
+
+                {/* Device Upload Section & Preview */}
+                <div className="pt-2 border-t border-slate-800 space-y-3">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    {/* Hidden Native File Input */}
                     <input
+                      ref={fileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp,image/gif,image/*"
                       onChange={handleImageFileUpload}
                       className="hidden"
                     />
-                  </label>
+
+                    {/* Trigger Button */}
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploadingImage}
+                      className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shrink-0 cursor-pointer flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                    >
+                      <Upload className="w-4 h-4" />
+                      <span>{isUploadingImage ? 'Optimizing Image...' : 'Upload Image'}</span>
+                    </button>
+
+                    {/* Image URL fallback input */}
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        value={eventFormData.imageUrl || ''}
+                        onChange={(e) => setEventFormData({ ...eventFormData, imageUrl: e.target.value })}
+                        placeholder="Or paste external image URL / link..."
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {imageUploadError && (
+                    <div className="p-2.5 rounded-lg bg-red-900/30 border border-red-500/40 text-red-200 text-xs flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{imageUploadError}</span>
+                    </div>
+                  )}
+
+                  {/* Active Selected Image Preview Box */}
+                  {eventFormData.imageUrl && (
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+                      <div className="w-20 h-14 rounded-lg overflow-hidden bg-black shrink-0 border border-slate-700">
+                        <img
+                          src={eventFormData.imageUrl}
+                          alt="Banner Preview"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                          <span className="text-xs font-bold text-slate-200">Active Banner Image Loaded</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 truncate mt-0.5 font-mono">
+                          {eventFormData.imageUrl.startsWith('data:image/')
+                            ? 'Custom Image Uploaded from Device (Auto-Optimized)'
+                            : eventFormData.imageUrl}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEventFormData({ ...eventFormData, imageUrl: PRESET_BANNERS[0].url })}
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] cursor-pointer"
+                        title="Reset to default preset"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1590,25 +1757,24 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
                   Event Highlights & Offerings (Key bullet points)
                 </label>
 
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex gap-2">
                   <input
                     type="text"
                     value={offeringInputEn}
                     onChange={(e) => setOfferingInputEn(e.target.value)}
-                    placeholder="Add item in English (e.g. Gold and diamond jewelry)"
-                    className="flex-1 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white"
-                  />
-                  <input
-                    type="text"
-                    value={offeringInputBn}
-                    onChange={(e) => setOfferingInputBn(e.target.value)}
-                    placeholder="বাংলা বিবরণ (ঐচ্ছিক)"
-                    className="flex-1 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white font-bangla"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddOffering();
+                      }
+                    }}
+                    placeholder="Add highlight item (e.g. Gold & diamond jewelry, Masterclasses, Evening concerts)"
+                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-sans"
                   />
                   <button
                     type="button"
                     onClick={handleAddOffering}
-                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shrink-0 cursor-pointer"
+                    className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shrink-0 cursor-pointer transition-colors"
                   >
                     Add Highlight
                   </button>
@@ -1626,7 +1792,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
                       <button
                         type="button"
                         onClick={() => handleRemoveOffering(idx)}
-                        className="text-slate-400 hover:text-red-400 ml-1"
+                        className="text-slate-400 hover:text-red-400 ml-1 cursor-pointer"
                       >
                         ×
                       </button>
@@ -1635,37 +1801,22 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
                 </div>
               </div>
 
-              {/* Row 7: Notes & Description */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                    Event Description / Notes (English)
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={eventFormData.notes || ''}
-                    onChange={(e) => setEventFormData({ ...eventFormData, notes: e.target.value })}
-                    placeholder="Detailed overview for visitors..."
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-                    Event Description / Notes (Bangla)
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={eventFormData.notesBn || ''}
-                    onChange={(e) => setEventFormData({ ...eventFormData, notesBn: e.target.value })}
-                    placeholder="দর্শনার্থীদের জন্য বিস্তারিত বিবরণ..."
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-bangla"
-                  />
-                </div>
+              {/* Row 7: Notes & Description (English only) */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                  Event Description / Notes
+                </label>
+                <textarea
+                  rows={4}
+                  value={eventFormData.notes || ''}
+                  onChange={(e) => setEventFormData({ ...eventFormData, notes: e.target.value })}
+                  placeholder="Detailed overview and schedule information for visitors..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-sans"
+                />
               </div>
 
-              {/* Row 8: External Links */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Row 8: External Links (Google Maps, Facebook, Instagram) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
                     Google Maps URL
@@ -1675,7 +1826,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
                     value={eventFormData.mapUrl || ''}
                     onChange={(e) => setEventFormData({ ...eventFormData, mapUrl: e.target.value })}
                     placeholder="https://maps.app.goo.gl/..."
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white"
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-sans"
                   />
                 </div>
 
@@ -1688,7 +1839,20 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
                     value={eventFormData.facebookEventUrl || ''}
                     onChange={(e) => setEventFormData({ ...eventFormData, facebookEventUrl: e.target.value })}
                     placeholder="https://facebook.com/events/..."
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white"
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-sans"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                    Instagram URL
+                  </label>
+                  <input
+                    type="url"
+                    value={eventFormData.instagramUrl || ''}
+                    onChange={(e) => setEventFormData({ ...eventFormData, instagramUrl: e.target.value })}
+                    placeholder="https://instagram.com/dhakanightmarket/..."
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-sans"
                   />
                 </div>
               </div>

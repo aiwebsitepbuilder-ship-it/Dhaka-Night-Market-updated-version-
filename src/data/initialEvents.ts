@@ -40,6 +40,7 @@ export const INITIAL_EVENTS: EventDetail[] = [
     notesBn: 'সকল দর্শনার্থীদের জন্য ফ্রি এন্ট্রি। ব্রাইডাল পোশাক, স্বর্ণ ও হীরার অলঙ্কার এবং প্রিমিয়াম লাইফস্টাইল কালেকশনের কিউরেটেড প্রদর্শনীতে আপনাকে স্বাগতম।',
     mapUrl: 'https://maps.google.com/?q=Sheraton+Banani+Dhaka',
     facebookEventUrl: 'https://www.facebook.com/dhakanightmarket/',
+    instagramUrl: 'https://www.instagram.com/dhakanightmarket/',
   },
   {
     id: 'dhaka-night-market-summer-edition',

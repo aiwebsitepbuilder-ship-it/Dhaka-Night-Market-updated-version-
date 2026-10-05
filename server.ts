@@ -126,6 +126,26 @@ app.post('/api/auth/change-passcode', requireAdminAuth, (req, res) => {
   return res.json({ success: true, message: 'Passcode updated successfully.' });
 });
 
+app.post('/api/auth/change-username', requireAdminAuth, (req, res) => {
+  const { newUsername } = req.body || {};
+  if (!newUsername || typeof newUsername !== 'string' || !newUsername.trim()) {
+    return res.status(400).json({ error: 'Username cannot be empty.' });
+  }
+
+  try {
+    const config = fs.existsSync(adminConfigFile)
+      ? JSON.parse(fs.readFileSync(adminConfigFile, 'utf-8'))
+      : {};
+    config.username = newUsername.trim();
+    config.updatedAt = new Date().toISOString();
+    fs.writeFileSync(adminConfigFile, JSON.stringify(config, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to persist admin username:', err);
+  }
+
+  return res.json({ success: true, message: 'Username updated successfully.' });
+});
+
 app.post('/api/auth/forgot-password', (req, res) => {
   const { identifier, targetEmail } = req.body || {};
   const mail = targetEmail || 'dhakanightmarket@gmail.com';

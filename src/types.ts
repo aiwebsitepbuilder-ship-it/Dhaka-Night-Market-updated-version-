@@ -58,6 +58,7 @@ export interface EventDetail {
   brandCount?: string;
   foodBrandCount?: string;
   facebookEventUrl?: string;
+  instagramUrl?: string;
   mapUrl?: string;
   notes?: string;
   notesBn?: string;

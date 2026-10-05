@@ -387,22 +387,36 @@ export const EventsPage: React.FC<EventsPageProps> = ({ onNavigate, lang }) => {
                   </div>
                 </div>
 
-                <div className="p-5 pt-0 border-t border-slate-800/80 mt-4 flex items-center justify-between text-xs">
-                  {event.facebookEventUrl ? (
-                    <a
-                      href={event.facebookEventUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-colors font-medium"
-                    >
-                      <span>{lang === 'en' ? 'Facebook Event' : 'ফেসবুক ইভেন্ট'}</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  ) : (
-                    <span className="font-mono text-[11px] text-slate-500">
-                      {lang === 'en' ? 'Official Record' : 'অফিসিয়াল রেকর্ড'}
-                    </span>
-                  )}
+                <div className="p-5 pt-0 border-t border-slate-800/80 mt-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-3">
+                    {event.facebookEventUrl && (
+                      <a
+                        href={event.facebookEventUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-colors font-medium"
+                      >
+                        <span>{lang === 'en' ? 'Facebook' : 'ফেসবুক'}</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                    {event.instagramUrl && (
+                      <a
+                        href={event.instagramUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-pink-400 hover:text-pink-300 transition-colors font-medium"
+                      >
+                        <span>{lang === 'en' ? 'Instagram' : 'ইনস্টাগ্রাম'}</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                    {!event.facebookEventUrl && !event.instagramUrl && (
+                      <span className="font-mono text-[11px] text-slate-500">
+                        {lang === 'en' ? 'Official Record' : 'অফিসিয়াল রেকর্ড'}
+                      </span>
+                    )}
+                  </div>
                   <button
                     onClick={() => onNavigate('gallery')}
                     className="inline-flex items-center gap-1 text-slate-300 hover:text-amber-300 font-medium cursor-pointer transition-colors"
