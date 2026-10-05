@@ -64,7 +64,13 @@ function apiMiddlewarePlugin() {
                 } catch {}
               }
 
-              if (passcode === activePasscode || passcode === 'dnm2026') {
+              const inputCode = (passcode || '').trim();
+              if (
+                inputCode === activePasscode ||
+                inputCode === 'dnm2026' ||
+                inputCode.toLowerCase() === 'dnm2026' ||
+                inputCode.toLowerCase() === activePasscode.toLowerCase()
+              ) {
                 const payload = {
                   role: 'admin',
                   exp: Date.now() + 24 * 60 * 60 * 1000,

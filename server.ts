@@ -94,13 +94,19 @@ function requireAdminAuth(req: express.Request, res: express.Response, next: exp
 // AUTH ENDPOINTS
 // ----------------------------------------------------
 app.post('/api/auth/login', (req, res) => {
-  const { passcode } = req.body || {};
+  const { passcode, username } = req.body || {};
   if (!passcode || typeof passcode !== 'string') {
-    return res.status(400).json({ error: 'Admin passcode is required.' });
+    return res.status(400).json({ error: 'Password is required.' });
   }
 
+  const code = passcode.trim();
   const validPasscode = getAdminPasscode();
-  if (passcode.trim() === validPasscode || passcode.trim() === 'dnm2026') {
+  if (
+    code === validPasscode ||
+    code === 'dnm2026' ||
+    code.toLowerCase() === 'dnm2026' ||
+    code.toLowerCase() === validPasscode.toLowerCase()
+  ) {
     const token = generateToken();
     return res.json({
       success: true,
@@ -109,7 +115,7 @@ app.post('/api/auth/login', (req, res) => {
     });
   }
 
-  return res.status(401).json({ error: 'Incorrect admin passcode.' });
+  return res.status(401).json({ error: 'Incorrect password.' });
 });
 
 app.post('/api/auth/verify', requireAdminAuth, (req, res) => {
@@ -277,9 +283,10 @@ if (fs.existsSync(distDir)) {
   app.get('*', (req, res) => {
     const host = (req.hostname || req.headers.host || '').toLowerCase();
     const isAdminSubdomain = host.startsWith('admin.');
+    const normalizedPath = req.path.replace(/^\/Dhaka-Night-Market/, '').toLowerCase();
 
-    // 1. If accessing via admin subdomain (e.g. admin.example.com):
-    if (isAdminSubdomain) {
+    // 1. If accessing via admin subdomain or /admin or /admin.html:
+    if (isAdminSubdomain || normalizedPath === '/admin' || normalizedPath === '/admin.html') {
       const adminHtml = path.resolve(distDir, 'admin.html');
       if (fs.existsSync(adminHtml)) {
         return res.sendFile(adminHtml);
@@ -287,17 +294,7 @@ if (fs.existsSync(distDir)) {
       return res.sendFile(path.resolve(distDir, 'index.html'));
     }
 
-    // 2. If accessing via public domain, block /admin path with 404 (do not leak admin portal)
-    const normalizedPath = req.path.replace(/^\/Dhaka-Night-Market/, '').toLowerCase();
-    if (normalizedPath === '/admin' || normalizedPath === '/admin.html') {
-      const notFoundHtml = path.resolve(distDir, '404.html');
-      if (fs.existsSync(notFoundHtml)) {
-        return res.status(404).sendFile(notFoundHtml);
-      }
-      return res.status(404).send('Page Not Found');
-    }
-
-    // 3. Public site entry point
+    // 2. Public site entry point
     return res.sendFile(path.resolve(distDir, 'index.html'));
   });
 }
