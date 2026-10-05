@@ -17,7 +17,6 @@ import { PartnersPage } from './pages/PartnersPage';
 import { StoriesPage } from './pages/StoriesPage';
 import { AboutPage } from './pages/AboutPage';
 import { ContactPage } from './pages/ContactPage';
-import { AdminPage } from './pages/AdminPage';
 
 export default function App() {
   // Determine initial page from URL hash or path
@@ -33,7 +32,6 @@ export default function App() {
       'stories',
       'about',
       'contact',
-      'admin',
     ];
     if (validPages.includes(hash as PageId)) {
       return hash as PageId;
@@ -104,10 +102,6 @@ export default function App() {
         en: 'Contact & Location – Dhaka Night Market',
         bn: 'যোগাযোগ ও অবস্থান – ঢাকা নাইট মার্কেট',
       },
-      admin: {
-        en: 'Admin & Organizer Portal – Dhaka Night Market',
-        bn: 'এডমিন ও কন্ট্রোল পোর্টাল – ঢাকা নাইট মার্কেট',
-      },
     };
 
     const currentTitle = pageTitles[currentPage]?.[lang] ?? pageTitles.home[lang];
@@ -167,9 +161,6 @@ export default function App() {
             <AboutPage onNavigate={handleNavigate} lang={lang} />
           )}
           {currentPage === 'contact' && <ContactPage lang={lang} />}
-          {currentPage === 'admin' && (
-            <AdminPage onNavigate={handleNavigate} lang={lang} />
-          )}
         </main>
 
         {/* Footer */}

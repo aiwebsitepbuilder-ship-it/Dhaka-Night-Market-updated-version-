@@ -23,6 +23,7 @@ import {
   Upload,
   RefreshCw,
   Eye,
+  EyeOff,
   LogOut,
   Shield,
   Key,
@@ -32,9 +33,11 @@ import {
   ChevronRight,
   Search,
   Filter,
+  User,
 } from 'lucide-react';
 import { EventDetail, Language, PageId, EnquiryRecord, EnquiryStatus } from '../types';
 import { useEvents } from '../context/EventsContext';
+import { safeLocalStorage, safeSessionStorage } from '../utils/safeStorage';
 import {
   OFFICIAL_ADMIN_EMAIL,
   fetchAllEnquiries,
@@ -69,6 +72,7 @@ const PRESET_BANNERS = [
 
 const PASSCODE_STORAGE_KEY = 'dnm_admin_passcode';
 const SESSION_STORAGE_KEY = 'dnm_admin_session';
+const USERNAME_STORAGE_KEY = 'dnm_admin_username';
 
 interface AdminPageProps {
   onNavigate: (page: PageId) => void;
@@ -91,10 +95,23 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
 
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return sessionStorage.getItem(SESSION_STORAGE_KEY) === 'true';
+    return safeSessionStorage.getItem(SESSION_STORAGE_KEY) === 'true';
+  });
+  const [usernameInput, setUsernameInput] = useState<string>(() => {
+    return safeSessionStorage.getItem(USERNAME_STORAGE_KEY) || 'admin';
+  });
+  const [loggedUsername, setLoggedUsername] = useState<string>(() => {
+    return safeSessionStorage.getItem(USERNAME_STORAGE_KEY) || 'admin';
   });
   const [passcodeInput, setPasscodeInput] = useState('');
+  const [showLoginPasscode, setShowLoginPasscode] = useState(false);
   const [authError, setAuthError] = useState('');
+
+  // Forgot Password Modal State
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotIdentifier, setForgotIdentifier] = useState(OFFICIAL_ADMIN_EMAIL);
+  const [forgotStatus, setForgotStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [forgotMessage, setForgotMessage] = useState('');
 
   // Active Admin Tab
   const [activeTab, setActiveTab] = useState<'events' | 'enquiries' | 'settings'>('events');
@@ -115,10 +132,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
 
   // Settings State
   const [currentPasscode, setCurrentPasscode] = useState<string>(() => {
-    return localStorage.getItem(PASSCODE_STORAGE_KEY) || 'dnm2026';
+    return safeLocalStorage.getItem(PASSCODE_STORAGE_KEY) || 'dnm2026';
   });
   const [newPasscode, setNewPasscode] = useState('');
   const [confirmPasscode, setConfirmPasscode] = useState('');
+  const [showNewPasscode, setShowNewPasscode] = useState(false);
+  const [showConfirmPasscode, setShowConfirmPasscode] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState('');
   const [testMailStatus, setTestMailStatus] = useState<string | null>(null);
 
@@ -142,22 +161,96 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
   };
 
   // Auth Handler
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const stored = localStorage.getItem(PASSCODE_STORAGE_KEY) || 'dnm2026';
-    if (passcodeInput.trim() === stored || passcodeInput.trim() === 'dnm2026') {
+    setAuthError('');
+    const user = usernameInput.trim();
+    if (!user) {
+      setAuthError('Please enter your admin username.');
+      return;
+    }
+    const code = passcodeInput.trim();
+    if (!code) {
+      setAuthError('Please enter your password.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user, passcode: code }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.token) {
+          safeSessionStorage.setItem('dnm_admin_token', data.token);
+        }
+        safeSessionStorage.setItem(SESSION_STORAGE_KEY, 'true');
+        safeSessionStorage.setItem(USERNAME_STORAGE_KEY, user);
+        setLoggedUsername(user);
+        setIsAuthenticated(true);
+        setPasscodeInput('');
+        return;
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setAuthError(errData.error || 'Incorrect username or password. Please try again.');
+        return;
+      }
+    } catch {
+      // Backend unavailable or static hosting fallback
+    }
+
+    const stored = safeLocalStorage.getItem(PASSCODE_STORAGE_KEY) || 'dnm2026';
+    if (code === stored || code === 'dnm2026') {
+      const staticToken = `static_${btoa(Date.now().toString())}`;
+      safeSessionStorage.setItem('dnm_admin_token', staticToken);
+      safeSessionStorage.setItem(SESSION_STORAGE_KEY, 'true');
+      safeSessionStorage.setItem(USERNAME_STORAGE_KEY, user);
+      setLoggedUsername(user);
       setIsAuthenticated(true);
-      sessionStorage.setItem(SESSION_STORAGE_KEY, 'true');
       setAuthError('');
       setPasscodeInput('');
     } else {
-      setAuthError('Incorrect passcode. Hint: Default passcode is dnm2026');
+      setAuthError('Incorrect password. Please check credentials or click "Forgot Password?".');
     }
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    safeSessionStorage.removeItem(SESSION_STORAGE_KEY);
+    safeSessionStorage.removeItem('dnm_admin_token');
+  };
+
+  // Forgot Password Handler
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotStatus('sending');
+
+    const targetEmail = OFFICIAL_ADMIN_EMAIL;
+    const identifier = forgotIdentifier.trim() || usernameInput.trim() || 'admin';
+    const timestamp = new Date().toLocaleString();
+    const subject = `[Admin Password Reset Request] Dhaka Night Market Portal - User: ${identifier}`;
+    const bodyText = `Official Password Reset Notification\n\nOrganizer Mail: ${targetEmail}\nUser Identity: ${identifier}\nTimestamp: ${timestamp}\n\nThis is a verified password reset request from the Dhaka Night Market Admin Portal. Please verify credentials or issue a new security passcode.`;
+
+    try {
+      await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier, targetEmail }),
+      });
+    } catch {
+      // Backend optional in static mode
+    }
+
+    const mailUrl = generateMailtoUrl(subject, bodyText);
+    window.open(mailUrl, '_blank');
+
+    setForgotStatus('sent');
+    setForgotMessage(
+      `Password reset request generated and connected to ${targetEmail}. Mail client opened. Please check your inbox or notify your system administrator.`
+    );
   };
 
   // Open Event Editor
@@ -375,7 +468,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
   };
 
   // Change Passcode
-  const handleChangePasscode = (e: React.FormEvent) => {
+  const handleChangePasscode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPasscode.length < 4) {
       setSettingsMessage('Passcode must be at least 4 characters long.');
@@ -385,7 +478,22 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
       setSettingsMessage('New passcode and confirm passcode do not match.');
       return;
     }
-    localStorage.setItem(PASSCODE_STORAGE_KEY, newPasscode);
+
+    const token = safeSessionStorage.getItem('dnm_admin_token');
+    try {
+      await fetch('/api/auth/change-passcode', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token || ''}`,
+        },
+        body: JSON.stringify({ newPasscode }),
+      });
+    } catch {
+      // Backend optional in static mode
+    }
+
+    safeLocalStorage.setItem(PASSCODE_STORAGE_KEY, newPasscode);
     setCurrentPasscode(newPasscode);
     setNewPasscode('');
     setConfirmPasscode('');
@@ -433,26 +541,67 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
             <p className="text-xs uppercase tracking-widest text-amber-400 font-semibold font-display">
               Admin & Event Control Portal
             </p>
-            <p className="text-xs text-slate-300 pt-1">
-              Authorized organizers can modify events and review incoming vendor & partner applications without requiring Google AI Studio.
-            </p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
+            {/* Username Section */}
             <div>
               <label className="block text-xs font-semibold text-slate-200 uppercase tracking-wider mb-2">
-                Enter Admin Access Passcode
+                Username
               </label>
               <div className="relative">
                 <input
-                  type="password"
-                  value={passcodeInput}
-                  onChange={(e) => setPasscodeInput(e.target.value)}
-                  placeholder="Enter passcode..."
-                  className="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-amber-400 transition-colors pl-10"
+                  type="text"
+                  value={usernameInput}
+                  onChange={(e) => setUsernameInput(e.target.value)}
+                  placeholder="Enter admin username..."
+                  className="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-amber-400 transition-colors pl-10 pr-4 font-sans"
                   autoFocus
                 />
+                <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+              </div>
+            </div>
+
+            {/* Password Section */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-semibold text-slate-200 uppercase tracking-wider">
+                  Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgotPassword(true);
+                    setForgotStatus('idle');
+                    setForgotMessage('');
+                  }}
+                  className="text-xs text-amber-400 hover:text-amber-300 transition-colors cursor-pointer hover:underline"
+                >
+                  Forgot Password?
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  type={showLoginPasscode ? 'text' : 'password'}
+                  value={passcodeInput}
+                  onChange={(e) => setPasscodeInput(e.target.value)}
+                  placeholder="Enter password..."
+                  className="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-amber-400 transition-colors pl-10 pr-10 font-mono"
+                />
                 <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPasscode(!showLoginPasscode)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-400 p-1 cursor-pointer transition-colors"
+                  title={showLoginPasscode ? 'Hide password' : 'Show password'}
+                  aria-label={showLoginPasscode ? 'Hide password' : 'Show password'}
+                >
+                  {showLoginPasscode ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
               </div>
             </div>
 
@@ -471,6 +620,78 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
               <span>Unlock Admin Portal</span>
             </button>
           </form>
+
+          {/* Forgot Password Modal */}
+          {showForgotPassword && (
+            <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="w-full max-w-md bg-[#0D152D] border border-amber-500/30 rounded-2xl p-6 shadow-2xl space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                      <Mail className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Reset Admin Password</h3>
+                      <p className="text-[11px] text-slate-400">Connected to {OFFICIAL_ADMIN_EMAIL}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPassword(false)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  If you need to recover or change your admin password, dispatch an official reset notification to the registered organizer mailbox:
+                  <span className="block mt-1 font-mono text-amber-300 font-semibold">{OFFICIAL_ADMIN_EMAIL}</span>
+                </p>
+
+                <form onSubmit={handleForgotPasswordSubmit} className="space-y-4 pt-1">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Confirm Admin Username or Email
+                    </label>
+                    <input
+                      type="text"
+                      value={forgotIdentifier}
+                      onChange={(e) => setForgotIdentifier(e.target.value)}
+                      placeholder="admin or dhakanightmarket@gmail.com"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-amber-400 font-sans"
+                      required
+                    />
+                  </div>
+
+                  {forgotMessage && (
+                    <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <span className="leading-snug">{forgotMessage}</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-end gap-2.5 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotPassword(false)}
+                      className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer transition-colors"
+                    >
+                      Close
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={forgotStatus === 'sending'}
+                      className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
+                    >
+                      <Mail className="w-3.5 h-3.5" />
+                      <span>{forgotStatus === 'sending' ? 'Sending...' : 'Send Reset Request via Mail'}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
 
           <div className="pt-4 border-t border-slate-800 text-center space-y-2">
             <p className="text-[11px] text-slate-400">
@@ -500,6 +721,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
               Live Admin Session
+            </span>
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-[11px]">
+              <User className="w-3 h-3 text-indigo-400" />
+              User: <strong className="font-mono text-white">{loggedUsername}</strong>
             </span>
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px]">
               <Mail className="w-3 h-3 text-amber-400" />
@@ -1000,26 +1225,56 @@ export const AdminPage: React.FC<AdminPageProps> = ({ onNavigate, lang }) => {
                 <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
                   New Passcode
                 </label>
-                <input
-                  type="password"
-                  value={newPasscode}
-                  onChange={(e) => setNewPasscode(e.target.value)}
-                  placeholder="Enter new passcode..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
-                />
+                <div className="relative">
+                  <input
+                    type={showNewPasscode ? 'text' : 'password'}
+                    value={newPasscode}
+                    onChange={(e) => setNewPasscode(e.target.value)}
+                    placeholder="Enter new passcode..."
+                    className="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPasscode(!showNewPasscode)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-400 p-1 cursor-pointer transition-colors"
+                    title={showNewPasscode ? 'Hide passcode' : 'Show passcode'}
+                    aria-label={showNewPasscode ? 'Hide passcode' : 'Show passcode'}
+                  >
+                    {showNewPasscode ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
                   Confirm New Passcode
                 </label>
-                <input
-                  type="password"
-                  value={confirmPasscode}
-                  onChange={(e) => setConfirmPasscode(e.target.value)}
-                  placeholder="Repeat new passcode..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400"
-                />
+                <div className="relative">
+                  <input
+                    type={showConfirmPasscode ? 'text' : 'password'}
+                    value={confirmPasscode}
+                    onChange={(e) => setConfirmPasscode(e.target.value)}
+                    placeholder="Repeat new passcode..."
+                    className="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-400 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPasscode(!showConfirmPasscode)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-400 p-1 cursor-pointer transition-colors"
+                    title={showConfirmPasscode ? 'Hide passcode' : 'Show passcode'}
+                    aria-label={showConfirmPasscode ? 'Hide passcode' : 'Show passcode'}
+                  >
+                    {showConfirmPasscode ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               {settingsMessage && (

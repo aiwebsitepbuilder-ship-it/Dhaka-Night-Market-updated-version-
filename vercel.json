@@ -1,0 +1,28 @@
+{
+  "framework": "vite",
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "admin.(?<domain>.*)"
+        }
+      ],
+      "destination": "/admin.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/404.html"
+    },
+    {
+      "source": "/admin.html",
+      "destination": "/404.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

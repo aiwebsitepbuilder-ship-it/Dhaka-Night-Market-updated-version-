@@ -7,8 +7,7 @@ export type PageId =
   | 'partners'
   | 'stories'
   | 'about'
-  | 'contact'
-  | 'admin';
+  | 'contact';
 
 export type Language = 'en' | 'bn';
 

@@ -39,8 +39,6 @@ jobs:
 
       - name: Build with Vite
         run: npm run build
-        env:
-          GITHUB_ACTIONS: 'true'
 
       - name: Verify build output exists
         run: |

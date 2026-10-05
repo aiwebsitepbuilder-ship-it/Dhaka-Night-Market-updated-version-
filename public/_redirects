@@ -1,0 +1,7 @@
+# Cloudflare Pages / Netlify Redirect & Rewrite Rules
+# Public domain blocks direct access to /admin
+/admin         /404.html    404
+/admin.html    /404.html    404
+
+# Single Page App routing for public site
+/*             /index.html  200

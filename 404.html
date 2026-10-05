@@ -5,20 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dhaka Night Market</title>
     <script>
-      // Single Page Application redirect for GitHub Pages & Cloudflare Pages
+      // Single Page Application redirect for GitHub Pages & custom domains
       (function () {
-        var isGitHubPages = window.location.pathname.indexOf('/Dhaka-Night-Market/') === 0;
-        var base = isGitHubPages ? '/Dhaka-Night-Market/' : '/';
-        var path = window.location.pathname;
-        if (isGitHubPages) {
-          path = path.slice('/Dhaka-Night-Market/'.length);
-        } else if (path.charAt(0) === '/') {
-          path = path.slice(1);
-        }
+        var pathname = window.location.pathname;
         var search = window.location.search || '';
         var hash = window.location.hash || '';
-        if (path && path !== 'index.html' && path !== '404.html') {
-          window.location.replace(base + '#/' + path + search + hash);
+
+        // Extract repository prefix if hosted on GitHub Pages (e.g. /<repo-name>/)
+        var pathSegments = pathname.split('/').filter(Boolean);
+        var base = '/';
+        var pagePath = '';
+
+        if (window.location.hostname.endsWith('github.io') && pathSegments.length > 0) {
+          // First segment is repository name on GitHub Pages
+          var repo = pathSegments[0];
+          base = '/' + repo + '/';
+          pagePath = pathSegments.slice(1).join('/');
+        } else {
+          pagePath = pathSegments.join('/');
+        }
+
+        if (pagePath && pagePath !== 'index.html' && pagePath !== '404.html') {
+          window.location.replace(base + '#/' + pagePath + search + hash);
         } else {
           window.location.replace(base + search + hash);
         }
@@ -26,6 +34,6 @@
     </script>
   </head>
   <body style="background-color: #070B19; color: #f1f5f9; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
-    <p>Redirecting to <a href="/Dhaka-Night-Market/" style="color: #f59e0b;">Dhaka Night Market</a>...</p>
+    <p>Redirecting to <a href="./" style="color: #f59e0b;">Dhaka Night Market</a>...</p>
   </body>
 </html>

@@ -1,4 +1,5 @@
 import { EnquiryRecord } from '../types';
+import { safeLocalStorage, safeSessionStorage } from '../utils/safeStorage';
 
 export const OFFICIAL_ADMIN_EMAIL = 'dhakanightmarket@gmail.com';
 const ENQUIRIES_STORAGE_KEY = 'dnm_enquiries_v2';
@@ -57,9 +58,9 @@ export async function saveEnquiryRecord(record: EnquiryRecord): Promise<void> {
   try {
     const existing = getStoredEnquiries();
     const updated = [record, ...existing.filter((e) => e.id !== record.id)];
-    localStorage.setItem(ENQUIRIES_STORAGE_KEY, JSON.stringify(updated));
+    safeLocalStorage.setItem(ENQUIRIES_STORAGE_KEY, JSON.stringify(updated));
   } catch (err) {
-    console.warn('Could not save enquiry to localStorage:', err);
+    console.warn('Could not save enquiry to storage:', err);
   }
 
   // 2. Persist to backend server API if reachable
@@ -79,23 +80,27 @@ export async function saveEnquiryRecord(record: EnquiryRecord): Promise<void> {
  */
 export async function fetchAllEnquiries(): Promise<EnquiryRecord[]> {
   try {
-    const res = await fetch('/api/enquiries');
+    const token = safeSessionStorage.getItem('dnm_admin_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch('/api/enquiries', { headers });
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
-        localStorage.setItem(ENQUIRIES_STORAGE_KEY, JSON.stringify(data));
+        safeLocalStorage.setItem(ENQUIRIES_STORAGE_KEY, JSON.stringify(data));
         return data;
       }
     }
   } catch {
-    // fallback to local storage
+    // fallback to storage
   }
   return getStoredEnquiries();
 }
 
 export function getStoredEnquiries(): EnquiryRecord[] {
   try {
-    const raw = localStorage.getItem(ENQUIRIES_STORAGE_KEY);
+    const raw = safeLocalStorage.getItem(ENQUIRIES_STORAGE_KEY);
     if (raw) {
       return JSON.parse(raw);
     }
@@ -113,12 +118,16 @@ export async function updateEnquiryStatus(
   const updated = list.map((item) =>
     item.id === id ? { ...item, status } : item
   );
-  localStorage.setItem(ENQUIRIES_STORAGE_KEY, JSON.stringify(updated));
+  safeLocalStorage.setItem(ENQUIRIES_STORAGE_KEY, JSON.stringify(updated));
 
   try {
+    const token = safeSessionStorage.getItem('dnm_admin_token');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
     await fetch(`/api/enquiries/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ status }),
     });
   } catch {
@@ -129,11 +138,16 @@ export async function updateEnquiryStatus(
 export async function deleteEnquiry(id: string): Promise<void> {
   const list = getStoredEnquiries();
   const updated = list.filter((item) => item.id !== id);
-  localStorage.setItem(ENQUIRIES_STORAGE_KEY, JSON.stringify(updated));
+  safeLocalStorage.setItem(ENQUIRIES_STORAGE_KEY, JSON.stringify(updated));
 
   try {
+    const token = safeSessionStorage.getItem('dnm_admin_token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
     await fetch(`/api/enquiries/${id}`, {
       method: 'DELETE',
+      headers,
     });
   } catch {
     // API optional in static mode
